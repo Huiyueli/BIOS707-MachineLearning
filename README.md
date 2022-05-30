@@ -7,7 +7,7 @@ The dataset of final project: https://www.datafiles.samhsa.gov/
 
 GGplot2: https://htmlpreview.github.io/?https://github.com/Huiyueli/MLinR/blob/main/Homework/ggplot2.html
 
-Cross validation: 
+Cross validation: https://htmlpreview.github.io/?https://github.com/Huiyueli/MLinR/blob/main/Homework/pca_cluster_knn_cv.html
 
 Lasso: https://htmlpreview.github.io/?https://github.com/Huiyueli/MLinR/blob/main/Homework/lasso_spline.html
 
