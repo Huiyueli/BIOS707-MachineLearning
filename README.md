@@ -1,2 +1,2 @@
 # MLinR
-The final project for machine learning in R
+The homework and final project for machine learning in R
