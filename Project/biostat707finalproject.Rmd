@@ -1,0 +1,77 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo =FALSE,warning = F,message = F)
+```
+
+```{r packages, message=FALSE, warning=FALSE}
+library(tidyverse) # R package for data science in an easy to use way
+library(ggplot2) # # R package for visualizing your data
+library(lubridate) # package for working with dates in R more easily
+library(patchwork) # package to simplify combining separate ggplots
+library(gridExtra) # package to arrange multiple grid-based plots on a page
+library(psych) # multivariate analysis and scale construction using factor analysis, principal component analysis, cluster analysis and reliability analysis
+library(corrplot) # provides a visual exploratory tool on correlation matrix
+library(gtsummary)
+library(cowplot)
+library(knitr)
+library(tableone)
+library(questionr)
+library(lsr)
+library(purrr)
+```
+
+
+```{r}
+df=read.csv("mh_data.csv")
+df1=df%>%select(-X)
+cols=c("EDUC","ETHNIC","RACE","GENDER","SPHSERVICE","CMPSERVICE","OPISERVICE","RTCSERVICE","IJSSERVICE","MARSTAT","SAP","EMPLOY","VETERAN","LIVARAG","TRAUSTREFLG","ANXIETYFLG","ADHDFLG","CONDUCTFLG","DELIRDEMFLG","BIPOLARFLG","DEPRESSFLG","ODDFLG",    "PDDFLG","PERSONFLG","SCHIZOFLG","ALCSUBFLG","OTHERDISFLG","STATEFIP" )
+df1[cols] <- lapply(df1[cols], as.factor)
+df2=df1
+```
+
+```{r,fig.width=6,fig.height=4}
+df_dp=df2%>%mutate(DEPRESSION=if_else(DEPRESSFLG==0,"No","Yes"))
+p1= ggplot(df_dp,aes(x =as.factor(DEPRESSION),fill=as.factor(DEPRESSION)))+geom_bar()+geom_text(aes(label = ..count..), stat = "count",vjust=-0.21,size=3.9)+
+  xlab("DEPRESSION")+ylab("Count")+scale_fill_hue(c=45)+theme_bw()+theme(legend.position = "none",axis.text.x=element_text(size=14,face="bold"),axis.text.y = element_text(size=14),axis.title=element_text(size=15,face="bold"))
+p1
+```
+
+
+```{r correlation plot,fig.width=6,fig.height=4}
+#df_selection1 = df2 %>% select(AGE, DEPRESSFLG,ANXIETYFLG,RACE,GENDER,EDUC,EMPLOY,LIVARAG)
+#SUM1 = df_selection1 %>% tbl_summary()
+p3= ggplot(df2, aes(AGE)) +geom_histogram(aes(y = ..density..),binwidth =10, fill = "lightsteelblue3",colour="black")+xlab("Age")+ylab("Density") +theme_bw()+theme(axis.text=element_text(size=12),axis.title=element_text(size=15,face="bold"))
+p3
+
+#M = cor(df2)
+#p4=corrplot(M,method = "circle",addCoef.col = "hotpink",tl.col = "black",number.cex =.8,mar = c(0,0,0.75,0),tl.cex=0.8)
+
+df3=df2%>%dplyr::select(AGE,DEPRESSFLG,RACE,GENDER,EDUC,EMPLOY,LIVARAG)%>%rename(DEPRESSION=DEPRESSFLG)
+
+#model.matrix(~0+., data=df3) %>% 
+  #cor(use="pairwise.complete.obs") %>% 
+  #ggcorrplot(show.diag = F, type="lower", lab=TRUE, lab_size=2.5,ggtheme = #ggplot2::theme_gray,colors = c("#6D9EC1", "white", "#E46726"),tl.cex = 6)
+```
+
+
+```{r,fig.width=6,fig.height=4}
+f = function(x,y) {
+    tbl = df3 %>% dplyr::select(x,y) %>% table()
+    chisq_pval = round(chisq.test(tbl)$p.value, 4)
+    cramV = round(cramersV(tbl), 4) 
+    data.frame(x, y, chisq_pval, cramV) }
+df_comb = data.frame(t(combn(sort(names(df3)), 2)), stringsAsFactors = F)
+df_res = map2_df(df_comb$X1, df_comb$X2, f)
+p2= df_res %>%
+  ggplot(aes(x,y,fill=chisq_pval))+
+  geom_tile()+
+  geom_text(aes(x,y,label=cramV))+
+  scale_fill_gradient(low="rosybrown", high="pink")+
+  theme_classic()+
+ theme(legend.position = "none",axis.text=element_text(face="bold",size = 9)) +xlab(" ")+ylab("")
+p2
+```
+
