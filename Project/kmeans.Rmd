@@ -1,0 +1,25 @@
+---
+title: "kmeans"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## K-means ckustering with n = 1000 sampled 
+```{r}
+# Sample 1000 from the processed dataset
+df3 <- read.csv("mh_data.csv")
+df3_train = df3[sample(nrow(df3), 1000), ]
+km.out = kmeans(df3_train,centers=5, nstart=20)
+table(km.out$cluster)
+fviz_cluster(km.out,data = df3_train,geom = "point")+xlab("PC1")+ylab("PC2")+ggtitle("K-Means clustering for two groups (k=2)")
+```
+## K-means ckustering with all observations
+```{r}
+km.out2 = kmeans(df3,centers=2, nstart=20)
+table(km.out2$cluster)
+fviz_cluster(km.out2,data = df3,geom = "point")+xlab("PC1")+ylab("PC2")+ggtitle("K-Means clustering for two groups (k=2)")
+```
