@@ -1,0 +1,476 @@
+---
+title: "BIOSTAT 707 Homework 2"
+author: "Huiyue Li"
+date: "10/21/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message=FALSE,warning=FALSE)
+```
+
+```{r package}
+# load package
+library(tidyverse)
+library(knitr)
+library(patchwork)
+library(ggfortify)
+library(factoextra)
+library(caTools)
+library(class)
+library(gmodels)
+library(caret)
+```
+
+---
+### Data Preparation
+#### 1. Import data and look at the first 5 lines
+```{r csv}
+hcv=read.csv("hcv.csv") #load data
+### first 5 lines
+head(hcv,5)
+```
+
+<br>
+
+#### 2. Answer the following questions (insert the R chunk's results in the text using `r {}`)
+```{r sum}
+summary(hcv)
+# a. observation 
+ob=nrow(hcv)
+ob
+# b. variable
+va=ncol(hcv)
+va-2 # exclude X and Category
+# c. missing data
+sum_na_name=names(which(colSums(is.na(hcv))>0))
+sum_na=colSums(is.na(hcv))[colSums(is.na(hcv))>0]
+sum_na_name
+sum_na
+# d. positive and negative
+hcv1=hcv%>%mutate(diagnosis=if_else(grepl("0",as.character(Category)), "Negative", "Positive")) #add column
+#positive
+sum_po=sum(hcv1$diagnosis=="Positive")
+sum_po
+#negative
+sum_ne=sum(hcv1$diagnosis=="Negative")
+sum_ne
+```
+**a.** There are `r {ob}` observation.  
+  
+**b.** There are `r {va-2}` independent variables.  
+  
+**c.** The columns `r {sum_na_name}` have missing value, and respectively `r {sum_na}` values were missing in these columns (`r {sum_na_name}`).  
+  
+**d.** There are `r {sum_po}` observations with positive diagnosis and `r {sum_ne}` observations with negative diagnosis.
+
+<br>
+
+#### 3. Perform the following tasks
+```{r task}
+# drop NA
+hcv2=hcv1%>%na.omit()
+# convert sex variable
+table(hcv2$Sex) #check Sex only with f and m values
+hcv3=hcv2%>%mutate(Sex=if_else(Sex=="m",1,0))
+hcv3$Sex=as.integer(hcv3$Sex) #interger form
+# convert Category variable
+hcv4=hcv3%>%mutate(Category=if_else(grepl("0",as.character(Category)), FALSE,TRUE))
+```
+
+<br>
+
+#### 4.Table and downsampling
+(1) To determine how many positive observations and negative observations are in the dataset with modifying the dimnames (FALSE refer to negative diagnosis, TRUE refer to positive diagnosis)  
+```{r table}
+tab=table(hcv4$Category)
+tab
+dimnames(tab)=list(c("FALSE(Negative)","TRUE(Positive)")) #change the names for comments
+tab
+```
+Based on the results, we can find that there are 56 positive observations and 533 negative observations. The negative observations are much more than positive observations.
+
+<br>
+
+(2) Perform downsampling
+```{r downsampling}
+# separate the dataframe
+hcv_po=hcv4%>%filter(Category==T)%>%select(-diagnosis)
+hcv_ne=hcv4%>%filter(Category==F)%>%select(-diagnosis)
+# count in the positive diagnosis dataframe (sex and age)
+hcv_po1=hcv_po%>%group_by(Sex,Age)%>%summarise(count=n())
+hcv_ne1=NULL
+hcv_po1=as.data.frame(hcv_po1)
+# sample
+set.seed(2021)
+for (i in 1:nrow(hcv_po1)) {
+  ne1=hcv_ne%>%filter(Sex==hcv_po1[i,1] & Age==hcv_po1[i,2])
+if(nrow(ne1)>=hcv_po1[i,3]){
+  ne1_1=ne1[sample(nrow(ne1),hcv_po1[i,3]),]
+}
+ else {
+   ne1_1=ne1
+ }
+  hcv_ne1=rbind(hcv_ne1,ne1_1)
+}
+# merge together
+hcv5=rbind(hcv_po,hcv_ne1)
+```
+
+<br>
+
+### 5. Plot the histograms
+```{r plot,fig.width=10,fig.height=10}
+hcv6=hcv5%>%select(-X,-Category)%>%gather("key","value") #trans
+ggplot(hcv6,aes(x =value, fill=key)) +geom_histogram(bins = 12, colour="black") +ggtitle("Histograms of Independent Variables")+xlab( "Value")+ylab("Count") +theme_bw()+theme(axis.text=element_text(size=9),axis.title=element_text(size=9,face="bold"),title = element_text(size = 11,face = "bold"))+facet_wrap(~factor(key),nrow = 4,ncol = 3,scales = "free")+theme(legend.position="none")
+
+```
+
+<br>
+
+### 6.Scale
+```{r}
+hcv_scale=hcv5 #variable
+hcv_scale[,-c(1,2,4)]=scale(hcv_scale[,-c(1,2,4)])
+hcv_pre=as_tibble(hcv_scale,rownames = NA) 
+```
+Because we choose the number of principal components for PCA based on the maximum variance explained, if without scaling (which enables variables to have standard deviation equal to 1), different units will bias the results of PCA.
+
+<br>
+
+### Principal Component Analysis (PCA)
+#### 7.Calculate principal components
+```{r calculate}
+# pca result
+pca=princomp(hcv_pre[,3:ncol(hcv_pre)])
+summary(pca,loadings = T)
+```
+
+<br>
+
+#### 8. Scree plot
+```{r scree plot}
+screeplot(pca,type = "lines",npcs = 12,main = "Scree plot of variation explained by each PC/Comp")
+```
+
+<br>
+
+#### 9.Plot using patchwork/gridExtra
+```{r fig.width=10,fig.height=4}
+# proportion of variance
+sdv=summary(pca)[[1]]
+por=data.frame(sdv^2/sum(sdv^2))
+por_com=cbind(por,1:12)
+rownames(por_com)=1:12
+colnames(por_com)=c("Por","Comp")
+#cumulative proportion of variance
+cum=cumsum(por)
+cum_com=cbind(cum,1:12)
+rownames(cum_com)=1:12
+colnames(cum_com)=c("Cum","Comp")
+# a. plot
+p1=ggplot(data = por_com,mapping =aes(x=as.factor(Comp),y=Por,group=1))+geom_line()+geom_point()+ggtitle ("Proportion of variance explained over the #of principal components")+ylab("Proportion of variance")+xlab("Comp")+ theme_bw()+theme(axis.text=element_text(size=8),axis.title=element_text(size=8,face="bold"),title = element_text(size = 6.5,face = "bold"))
+#b plot
+p2=ggplot(data = cum_com,mapping =aes(x=as.factor(Comp),y=Cum,group=1))+geom_line()+geom_point()+ggtitle ("Cumulative proportion of variance explained plot over the #of principal components")+ylab("Cumulative proportion of variance")+xlab("Comp")+geom_hline(aes(yintercept = 0.88,linetype="88% of variance"),colour="salmon")+geom_hline(aes(yintercept = 0.95,linetype="95% of variance"),colour="cyan3")+scale_linetype_manual(name = "Cumulative Proportion of Variance", values = c(1, 1),guide = guide_legend(override.aes = list(color = c("salmon", "cyan3"))))+theme_bw()+theme(axis.text=element_text(size=8),axis.title=element_text(size=8,face="bold"),title = element_text(size = 6.5,face = "bold"))
+p1+p2+plot_layout(nrow = 1)
+```
+
+<br>
+
+#### 10. Answer the question  
+```{r comp}
+# first, second and the third principal components
+por123=por_com[1:3,]
+por123
+# 88% and 95% of variance
+p88=min(cum_com[which(cum_com[,1]>0.88),2]) #88%
+p95=min(cum_com[which(cum_com[,1]>0.95),2]) #95%
+p88
+p95
+```
+Based on the result, the proportion of variance captured from first, second and the third principal components are respectively `r {por123[1,1]*100}`$\%$,`r {por123[2,1]*100}`$\%$ and `r {por123[3,1]*100}`$\%$.  
+To describe at least 88% and 95% of variance respective, we need correspondingly `r {p88}` and `r {p95}` principal components.
+
+<br>
+
+#### 11. Answer the question
+```{r top vaiable}
+pca$loadings[,1]
+```
+Based on the results,  the top 3 variables that contribute the most to the variance captured from PC1 are `ALB`, `CHE` and `BIL`.  
+
+<br>
+
+#### 12. Biplot
+```{r, fig.width=12,fig.height=7}
+biplot(pca,xlabs=rep(".",nrow(hcv_pre)))
+title("Biplot of PCA Components",line=3)
+```
+
+<br>
+
+#### 13. Clearer biplot
+```{r autoplot,fig.width=8,fig.height=6}
+autoplot(pca,data=hcv_pre,which="biplot",colour="Category",loadings=T,loadings.label=T,loadings.label.size=3.5,loadings.label.colour="black")+xlab("PC1 (30.61%)")+ylab("PC2 (13.65%)")+ggtitle("Clearer Biplot for the First Principal Components")
+```
+
+<br>
+
+### Hierarchical Clustering
+#### 14. Calculate a dissimilarity matrix using Euclidean distance and compute hierarchical clustering using the complete linkage method and plot the dendrogram.
+```{r fig.width=15,fig.height=8}
+# matrix
+euc=as.matrix(dist(hcv_pre[,3:ncol(hcv_pre)],method = "euclidean"))
+# compute hierarchical clustering
+hc_comp=hclust(dist(hcv_pre[,3:ncol(hcv_pre)],method = "euclidean"),method='complete')
+# plot
+p3=plot(hc_comp,main='Dendrogram with Complete Linkage (k=4)',xlab="Patient",cex=.9,sub = "")
+rect.hclust(hc_comp,k=4) 
+```
+
+<br>
+
+#### 15. Divide the dendrogram into 4 clusters using cutree() function and compare the compositions.
+```{r cutree}
+# cutree
+cut=cutree(hc_comp,4)
+# table
+table(cut)
+# compare
+table(cut,hcv_pre$Category)
+```
+Based on the result, cluster 1 is FALSE, cluster 2，3 and 4 are TRUE.
+
+<br>
+
+#### 16. Classification accuracy
+```{r}
+# classify
+pred_obs=data.frame(predict=ifelse(cut==1,FALSE,TRUE),observed=hcv_pre$Category)
+compare=pred_obs%>%group_by(predict,observed)%>%summarise(count=n()) #compare
+compare
+accuracy=round(sum(compare[c(1,4),3])/sum(compare[,3]),4)*100 #accuracy
+accuracy
+```
+Based on the results, we can know the classification accuracy would be `r {round(75/108,4)*100}` $\%$, which is not too much high.
+
+
+<br>
+
+#### 17. Repeat 15 and 16 for 10 clusters
+```{r cluster10,fig.width=15,fig.height=8}
+p3=plot(hc_comp,main='Dendrogram with Complete Linkage (k=10)',xlab="Patient",cex=.9,sub = "")
+rect.hclust(hc_comp,k=10) #plot for k=10 
+cut_10=cutree(hc_comp,10) #cut for k=10
+table(cut_10,hcv_pre$Category)# cluster 2 and 10 are FALSE, others are TRUE
+pred_obs10=data.frame(predict=ifelse(cut_10 %in% c(2,10),FALSE,TRUE),observed=hcv_pre$Category)
+compare10=pred_obs10%>%group_by(predict,observed)%>%summarise(count=n())
+compare10
+accuracy10=round(sum(compare10[c(1,4),3])/sum(compare10[,3]),4)*100
+accuracy10
+```
+For 10 cluster, here cluster 2 and cluster 10 are FALSE, other clusters are TRUE. Then the classification accuracy would be `r {round(78/108,4)*100}` $\%$, which is slightly higher than the result in `Question 16`.
+
+<br>
+
+#### 18. 4 clusters with Ward’s linkage method
+```{r fig.width=15,fig.height=8}
+hc_comp_w=hclust(dist(hcv_pre[,3:ncol(hcv_pre)],method = "euclidean"),method='ward.D2')
+# plot
+p4=plot(hc_comp_w,main='Dendrogram with Ward’s linkage (k=4)',xlab="Patient",cex=.9,sub = "")
+rect.hclust(hc_comp_w,k=4) 
+# table
+cut_w_4=cutree(hc_comp_w,4)
+# compare
+table(cut_w_4) 
+table(cut_w_4,hcv_pre$Category) # cluster 1 is FALSE, other clusters are TRUE
+#accuracy
+pred_obs_w4=data.frame(predict=ifelse(cut_w_4==1,FALSE,TRUE),observed=hcv_pre$Category)
+compare_w4=pred_obs_w4%>%group_by(predict,observed)%>%summarise(count=n())
+compare_w4
+accuracy_w4=round(sum(compare_w4[c(1,4),3])/sum(compare_w4[,3]),4)*100
+accuracy_w4
+```
+For 4 cluster with Ward’s linkage method, here cluster 1 is FALSE, other clusters are TRUE. Then the classification accuracy would be `r {round(75/108,4)*100}` $\%$, which is the same as the result in `Question 16`.
+
+<br>
+
+#### 19. 10 clusters with Ward’s linkage method
+```{r fig.width=15,fig.height=8}
+hc_comp_w=hclust(dist(hcv_pre[,3:ncol(hcv_pre)],method = "euclidean"),method='ward.D2')
+# plot
+p4=plot(hc_comp_w,main='Dendrogram with Ward’s linkage (k=10)',xlab="Patient",cex=.9,sub = "")
+rect.hclust(hc_comp_w,k=10) 
+# table
+cut_w_10=cutree(hc_comp_w,10)
+# compare
+table(cut_w_10) 
+table(cut_w_10,hcv_pre$Category) # cluster 2 and 3 are FALSE, other clusters are TRUE
+#accuracy
+pred_obs_w10=data.frame(predict=ifelse(cut_w_10 %in% c(2,3),FALSE,TRUE),observed=hcv_pre$Category)
+compare_w10=pred_obs_w10%>%group_by(predict,observed)%>%summarise(count=n())
+compare_w10
+accuracy_w10=round(sum(compare_w10[c(1,4),3])/sum(compare_w10[,3]),4)*100
+accuracy_w10
+```
+For 10 cluster with Ward’s linkage method, here cluster 2 and cluster 3 are FALSE, other clusters are TRUE. Then the classification accuracy would be `r {round(87/108,4)*100}` $\%$, which is higher than the result in `Question 16` and `Question 17 &18`.
+
+<br>
+
+#### 20. Comments for the previous 4 attempts at hierarchical clustering
+Based on the the previous 4 attempts at hierarchical clustering, we can find that   
+**(a)** The clustering result changes using different number of clusters when linkage are the same;    
+**(b)** Higher number of clusters will lead to clustering result that is closer to the actual outcomes, not only for clustering using complete linkage method but also for clustering using Ward’s linkage method;    
+**(c)** when the number of clusters is low and equal, and for clustering with complete linkage method or Ward’s linkage method, the classification accuracy results will be the same even though the correspondingly divided or non-divided dendrograms of clustering are both different; and when the number of clusters is high and the same, and for clustering with Ward’s linkage method, the classification accuracy results will be higher than using complete linkage method, also, the correspondingly divided or non-divided dendrograms of clustering are different.   
+
+<br>
+
+### K-Means Clustering   
+#### 21.Compute k-means clustering on this dataset using the kmeans() function for two clusters.
+```{r kmeans}
+km.out=kmeans(hcv_pre[,3:ncol(hcv_pre)],centers=2) #kmeans
+table=table(km.out$cluster,hcv_pre$Category) # cluster will change
+table1=as.data.frame(table)
+T_F=table1%>%filter(Var1==1)%>%arrange(desc(Freq))
+pred_obs_km=data.frame(predict=if_else(km.out$cluster==1,T_F[1,2],T_F[2,2]),observed=hcv_pre$Category)
+compare_km=pred_obs_km%>%group_by(predict,observed)%>%summarise(count=n())
+compare_km
+accuracy_km=round(sum(compare_km[c(1,4),3])/sum(compare_km[,3]),4)*100
+accuracy_km
+```
+For 2 clusters with k-means clustering, here cluster 1 is FALSE, cluster 2 is TRUE. Then the clustering classification accuracy would be `r {accuracy_km}` $\%$.
+
+<br>
+
+#### 22. Visualize the clusters
+```{r fig_width=8,fig.height=5}
+fviz_cluster(km.out,data = hcv_pre[,3:ncol(hcv_pre)],geom = "point")+xlab("PC1 (28.6%)")+ylab("PC2 (13.3%)")+ggtitle("Plot of K-Means clustering for two clusters")
+```
+
+<br>
+
+#### 23.Comments
+Because the algorithm for k-means clustering requires us to pre-specify the number of clusters, whereas the hierarchical clustering does not, which is to treat every observation as its own cluster. Then, at each step, we merge the two clusters that are more similar until all observations are clustered together. Based on the pairwise dissimilarities and specific linkage, the dendrogram for the hierarchical clustering can be divided into k clusters later.  
+In this dataset, the K-Means clustering seems to be more appropriate. Given `Question 20`, and because the accuracies of the hierarchical clustering for 4 clusters is the same as which of K-Means clustering for 2 clusters. Additionally, the distribution for these data points seems to be roundish. And here for the hierarchical clustering, we need to choose not only the appropriate K, as well as the appropriate linkage.
+
+<br>
+
+### kNN
+#### 24. Sampling for kNN
+```{r}
+hcv_knn=hcv_pre
+
+#sample
+set.seed(2021)
+split=sample.split(hcv_knn$Category,SplitRatio = 0.8)
+train_df=subset(hcv_knn,split==TRUE)
+test_df=subset(hcv_knn,split==FALSE)
+# independent or not
+X_train=train_df[,-c(1,2)]
+y_train=train_df$Category
+X_test=test_df[,-c(1,2)]
+y_test=test_df$Category
+```
+
+#### 25. Generate a KNN model using the knn() function
+```{r}
+knn_model=knn(train=X_train,test=X_test,cl=y_train,k=sqrt(nrow(X_train)))
+knn_model
+```
+
+#### 26. Produce a confusion matrix
+```{r}
+crotab=CrossTable(x=y_test,y=knn_model,prop.chisq = FALSE,prop.c = FALSE,prop.r = FALSE,prop.t = FALSE)
+
+```
+
+<br>
+
+#### 27. False positives, accuracy, sensitivity, error rate, and precision
+```{r}
+TN=crotab[[1]][1,1] # true negatives
+TP=crotab[[1]][2,2] #True positives
+FN=crotab[[1]][2,1] #false negatives
+FP=crotab[[1]][1,2] #false positives
+
+#accuracy
+accur=(TP+TN)/(TP+TN+FP+FN)
+#sensitivity
+sens=TP/(TP+FN)
+# error rate
+error=(FP+FN)/(TP+TN+FP+FN)
+# precision
+pres=TP/(TP+FP)
+
+cat("False positives: ",FP,'\n',"Accuracy: ",accur,'\n',"Sensitivity: ",sens,'\n',"Error rate: ",error,'\n',"Precision: ",pres)
+```
+Therefore, we can get that the number of False positives is `r {FP}`, Accuracy is `r {accur}`, the Sensitivity is `r {sens}`, the Error rate is `r {error}` and the Precision is `r {pres}`.
+
+<br>
+
+### K-fold cross validation with kNN, where K and k have different meanings
+#### 28.
+```{r}
+set.seed(2021)
+idx=createFolds(hcv_pre$Category,k=5) # get idx
+sapply(idx,length)
+result=lapply(idx, function(x) {
+  test_data_i=hcv_pre[x,]
+  train_data_i=hcv_pre[-x,]
+  X_train_i=train_data_i[,-c(1,2)]
+  y_train_i=train_data_i$Category
+  X_test_i=test_data_i[,-c(1,2)]
+  y_test_i=test_data_i$Category
+  knn_model_i=knn(train=X_train_i,test=X_test_i,cl=y_train_i,k=11)
+  crotab_i=CrossTable(x=y_test_i,y=knn_model_i,prop.chisq = FALSE,prop.c = FALSE,prop.r = FALSE,prop.t = FALSE)
+  TNi=crotab_i[[1]][1,1] # true negatives
+  TPi=crotab_i[[1]][2,2] #True positives
+  FNi=crotab_i[[1]][2,1] #false negatives
+  FPi=crotab_i[[1]][1,2] # false positives
+  erro=(FPi+FNi)/(TPi+TNi+FPi+FNi)
+  return(erro)
+})
+mean_error=mean(unlist(result))
+# result
+mean_error
+```
+The average of the 5 error rates are `r {mean_error}`.
+
+<br>
+
+#### 29. Plot  
+```{r,results="hide"}
+mean_error_k=rep(NA,5)
+for (j in c(5,7,9,11,13)) {
+  error_5_j=rep(NA,5)
+for (i in 1:5) {
+  test_data_ij=hcv_pre[idx[[i]],]
+  train_data_ij=hcv_pre[-idx[[i]],]
+  X_train_ij=train_data_ij[,-c(1,2)]
+  y_train_ij=train_data_ij$Category
+  X_test_ij=test_data_ij[,-c(1,2)]
+  y_test_ij=test_data_ij$Category
+  knn_model_ij=knn(train=X_train_ij,test=X_test_ij,cl=y_train_ij,k=j)
+  crotab_ij=CrossTable(x=y_test_ij,y=knn_model_ij,prop.chisq = FALSE,prop.c = FALSE,prop.r = FALSE,prop.t = FALSE)
+  TNij=crotab_ij[[1]][1,1] # true negatives
+  TPij=crotab_ij[[1]][2,2] #True positives
+  FNij=crotab_ij[[1]][2,1] #false negatives
+  FPij=crotab_ij[[1]][1,2] # false positives
+  error_5_j[i]=(FPij+FNij)/(TPij+TNij+FPij+FNij)
+}
+mean_error_k[(j-3)/2]=mean(error_5_j)
+} #hide CrossTable result here
+```
+
+```{r kfold}
+# mean result
+kfold=as.data.frame(cbind(mean_error_k,k=c(5,7,9,11,13)))
+p5=ggplot(data = kfold,mapping =aes(x=as.factor(k),y=mean_error_k,group=1))+geom_line()+geom_point()+ggtitle ("Error rates vs. k values")+ylab("Error rates")+xlab("k values")+ geom_text(aes(label = round(mean_error_k,6)),vjust=1.5,color="red") + theme_bw()+theme(axis.text=element_text(size=8),axis.title=element_text(size=8,face="bold"),title = element_text(size = 6.5,face = "bold"))
+p5
+# min k as required
+min_k=kfold[which(kfold[,1]==min(kfold[,1])),2]
+min_k
+```
+Here, k value= `r {min_k}`  gives the minimum average error rate when we perform 5-fold cross validation.  
+And for the initial kNN models from Question 10, we use a subset of observations to fit the model and the other subset of observations to get the estimate of the test error rates, then the reasons why it has high error rates might be that the error rates depends on precisely which observations are included in the training dataset and which observations are included in the test dataset, and here we only use a subset of observations (training dataset) to fit the model.  
+K-fold Cross Validation can use all of the observations to fit K models for K times. And we will use the average of K error rates to as the estimate to test error rates. Accuracy rate=1-Error rate. Therefore, the K-Fold Cross Validation can improve the accuracy rate of the kNN models.

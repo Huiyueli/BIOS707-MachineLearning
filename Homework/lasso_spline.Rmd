@@ -1,0 +1,581 @@
+---
+title: "20211118_Li_Huiyue_HW3"
+author: "Huiyue Li"
+date: "20211118"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message=FALSE,warning=FALSE)
+```
+
+
+# BIOSTAT 707 Homework 3
+
+---
+
+*In this homework, the objectives are to*
+
+1. Implement linear regression methods for solving a real-world regression problem using Multiple Linear Regression, Ridge Regression, and Lasso in R
+
+2. Implement and understand subset selection and regularization for linear regression using Ridge Regression and Lasso in R
+
+3. Implement and understand non-linear regression models including polynomial regression and natural splines in R
+
+4. Understand and interpret the results generated from training and testing various regression models using evaluation metrics such as mean squared error (MSE), the coefficient of determination (R-squared), and the sum of squared error (SSE) in R
+
+Assignments will only be accepted in electronic format in PDF files on Gradescope. Please add your answer to each question directly after the question prompt in the homework .Rmd file template in Sakai > Resources > HW3.
+
+```{r message=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(lubridate)
+library(patchwork)
+library(gridExtra)
+library(psych)
+library(corrplot)
+library(ggfortify)
+library(factoextra)
+library(class) #knn
+library(gmodels) # CrossTable()
+library(caret) # creatFolds()
+library(caTools) #sample.split()
+library(ROCR) # prediction(), performance()
+library(splines) # bs() used for generating knots
+library(knitr)
+library(psych) # pairs.panels()
+library(leaps) # regsubsets()
+library(glmnet) # glmnet(), cv.glmnet(), predict()
+
+library(splines) #bs to define the B-spline basis for polynomial splines
+```
+
+**Note: please remember to add set.seed(2021) at the beginning of all code that has any parameter that involves randomness to ensure that your code is reproducible.**
+
+---
+
+## Dataset Info:
+
+https://www.kaggle.com/kumarajarshi/life-expectancy-who
+
+Column Name Explanation:
+
+1. Country: Country Name (Character String)
+2. Year: Year (Integer)
+3. Status: Developing Country or Developed Country (Category)
+4. Life.expectancy: Life Expectancy in age (Double)
+5. Adult.Mortality: Adult Mortality Rates of both sexes, probability of dying between 15 and 60 years per 1000 population (Integer)
+6 infant.deaths: Number of Infant Deaths per 1000 population (Integer)
+7. Alcohol: Alcohol, recorded per capita (15+) consumption in litres of pure alcohol (Double)
+8. percentage.expenditure: Expenditure on health as a percentage of Gross Domestic Product per capita (Double)
+9. Hepatitis.B: Hepatitis B (HepB) immunization coverage among 1-year-olds in percentage (Double)
+10. Measles: number of reported Measles cases per 1000 population (Integer)
+11. BMI: Average Body Mass Index of entire population (Double)
+12. under.five.deaths: Number of under-five deaths per 1000 population (Integer)
+13. Polio: Polio (Pol3) immunization coverage among 1-year-olds (%)
+14. Total.expenditure: General government expenditure on health as a percentage of total government expenditure (Double)
+15. Diphtheria: Diphtheria tetanus toxoid and pertussis (DTP3) immunization coverage among 1-year-olds in percentage (Double)
+16. HIV.AIDS: Deaths per 1000 live births HIV/AIDS within 0-4 years (Double)
+17. GDP: Gross Domestic Product per capita in USD (Double)
+18. Population: Population of the country (Integer)
+19. thinness..1.19.years: Prevalence of thinness among children and adolescents for Age 10 to 19 in percentage (Double)
+20. thinness.5.9.years: Prevalence of thinness among children for Age 5 to 9 in percentage (Double)
+21. Income.composition.of.resources: Human Development Index in terms of income composition of resources (float ranging from 0 to 1)
+22. Schooling: Number of years of Schooling in years (Double)
+
+---
+
+## Linear Regression
+
+1. Load the dataset titled "life_expectancy_dataset.csv". Attached on the Sakai page for this homework is an excel document explaining what the variables mean in this dataset. Print the first 5 rows of the imported dataset and take an initial glance at the structure of this data. How many variables are there? How many observations are there? We will be predicting *Life.expectancy* in this homework using this dataset. Mutate the dataframe so that there is a new column titled *developed* where integer 1 means that the country of this row is developed and 0 otherwise. Save a dataframe object with all columns except for *Country*, *Year*, and *Status*.  (2 points)
+```{r}
+life=read.csv("life_expectancy_dataset.csv")
+head(life,5) # first five rows
+str(life) # structure
+# variables
+var=ncol(life)
+var
+# observations
+obs=nrow(life)
+obs
+# new dataset
+life1=life%>%mutate(developed=if_else(Status=="Developed",1,0))%>%select(-Country,-Year,-Status)
+life1$developed=as.integer(life1$developed)
+```
+There are `r {var}` variables and `r {obs}` observations for the original dataset.
+
+<br>
+
+
+2. Use sample.split() from the "caTools" package to split the data into 80:20 = train:test sets (80% of the data will be used for training, and 20% will be used to test the model). Set the seed of the random number generator for the random assignment of each observation to either the train or test set using set.seed(2021). Note that this is exactly the same method we used for HW. (3 points)
+```{r}
+set.seed(2021)
+split=sample.split(life1$Life.expectancy,SplitRatio = 0.8)
+train_df=subset(life1,split==TRUE)
+test_df=subset(life1,split==FALSE)
+```
+
+<br>
+
+3. Train a multiple (i.e. multivariate) linear regression model using the lm() function from the stats package and print its output. Make sure you build this model using the training set from Question 2. (2 points)
++ The multiple regression model should predict *Life.expectancy* using all other variables.
++ Use the summary() function to print the output of the multiple regression model.
++ Note: The Intercept value is the predicted output when all independent variables are set to 0.
++ Note: The values printed for each of the independent variables represent the increase in the predicted insurance charges when each independent variable increases by 1 unit, while all others stay the same.
+```{r}
+fit_life=lm(Life.expectancy~.,data = train_df)
+summary(fit_life)
+```
+
+
+
+4.  Based on the printed results from Question 3, answer the following questions: (3 points)
+(i) According to your model, how many more (or less) years would the Life Expectancy of someone change on average for every litre of pure alcohol they consume assuming all other information stays the same?
+(ii) According to your model, how many more (or less) years would the Life Expectancy of someone change on average for an additional year of education when all other information stays the same?
+(iii) According to your model, what's the difference in Life Expectancy between someone from a developed country and someone from a developing country if all other information stays the same?  
+
+**Answer:**  
+**(i)** According to the model, the Life Expectancy of someone would change less `-1.351e-02` years on average for every litre of pure alcohol they consume assuming all other information stays the same.    
+**(ii)** According to the model, the Life Expectancy of someone would change more `7.688e-01` years on average for an additional year of education when all other information stays the same.   
+**(iii)** According to the model, the difference in Life Expectancy between someone from a developed country and someone from a developing country if all other information stays the same is `9.120e-01`.  
+
+<br>
+
+
+**5**. Answer the following questions about your model: (3 points)
+(i) What is the maximum error of your model for your training set in units of Life.expectancy? (Hint: the prediction errors are shown in the “Residuals” section)
+(ii) Which variables are most influential when predicting the charges?
+(iii) How well do observations from the training set fit the trained model? Answer this question by looking at R-squared scores and adjusted R-squared scores.  
+**Answer:**  
+**(i)** The maximum error of the model for the training set in units of Life.expectancy is `17.4839`.    
+**(ii)** Based in the p-value results, `Adult.Mortality`, `BMI`, `under.five.deaths`, `HIV.AIDS`, `Income.composition.of.resources` and `Schooling` are most influential when predicting the charges.   
+**(iii)**  The R-squared scores is $0.8434$ which indicates that there is `0.8434` proportion of total variation in response variable attributable to the regression, and the adjusted R-squared scores is $0.8406$ which indicates that the addition of independent variables explain `0.8406` proportion of the variance in the response variable. Both of them mean that the observations from the training set fit the trained model pretty well.
+
+<br>
+
+6. Use the predict() function to make a prediction on *Life.expectancy* for your test data using the trained model. This function is what we used in HW4 and is not from the "glmnet" package. Make sure you use the test set you set aside in question 2. (2 points)
+
+```{r}
+#use except Life.expectancy in test df to predict, with [,-1] can get same result
+pred.life_test=predict(fit_life,test_df)
+```
+
+<br>
+
+7. Unlike with classification problems, in regression we cannot create a confusion matrix to evaluate the model’s performance. Instead, we can use other metrics to evaluate the model prediction accuracy. (10 points in total)
+
+(i) Calculate and print sum of squared residuals (SSE) .
++ Hint: You may want to use the equations from Lecture 14
+(2 points)
+```{r}
+SSE=sum((test_df$Life.expectancy-pred.life_test)^2)
+SSE
+```
+The SSE is `r {SSE}` here.  
+  
+(ii) Calculate and print the coefficient of multiple determination (also known as the R-squared statistic)  for the test set. How does this compare to the R-squared statistic for training data? (2 point)
+```{r}
+SST=sum((test_df$Life.expectancy-mean(test_df$Life.expectancy))^2)
+R_squared=1-(SSE/SST)
+R_squared
+```
+The R-squared statistic for test data is `r {R_squared}`, which is smaller than the R-squared statistic for training data.   
+  
+(iii) Calculate and print the mean squared error (MSE).
+(2 point)
+```{r}
+MSE=SSE/nrow(test_df)
+MSE
+```
+The MSE is `r {MSE}`.
+
+<br>
+    
+(iv) Make a scatter plot of the actual vs. predicted charges values of *Life.expectancy* for visualization purposes. (4 points)
++ Note: You may want to plot a diagonal line (i.e. x = y) to help visualize how well they correlate to each other, but this is optional. Why is this line useful for interpreting the scatter plot? You can use commands like abline(coef = c(0,1)) to achieve this.
+```{r,fig.width=6,fig.height=6}
+#see range
+r1=range(pred.life_test)
+r2=range(test_df$Life.expectancy)
+#plot with proper range for x- and y- axes
+plot(pred.life_test,test_df$Life.expectancy,
+     xlab="Predicted Values",ylab="Actual Values",
+     xlim=c(35,90),ylim=c(35,90),
+     main="Scatter plot of the actual vs. predicted values")
+abline(a = 0,                                      
+       b = 1,
+       col = "red",
+       lwd = 2) #add dignonal line
+```
+  
+For **x=y**, we can know that **predicted value=actual value**, so this diagonal line can help us to determine whether the prediction value deviates from the actual value and whether the model fit the data well. Given the figure, we find that there exist some overestimated and underestimated situations for the fitted model.
+
+
+<br>
+
+---
+
+## Ridge Regression
+
+8. We will use the glmnet() function from the glmnet package. Whereas all of the regression functions we have used so far, such as glm(), lm(), and regsubsets(), shared common syntax, glmnet() has a slightly different syntax. So to be able to use this function we will first process our data before.. Run the following lines of code to generate matrices of the testing and training datasets.
+
+Ridge regression seeks coefficient estimates that fit the data well by minimizing the residual sum of squares (RSS). This regularization is done by adding an extra term (the penalty term) to the original cost function: $RSS + \lambda \sum_{j=1}^p \beta^2_j$. Selecting a good value for $\lambda$ is critical. We will first create an array of $\lambda$ values we will test out. (0 points)
+
++ Remember to remove "eval=F" in the R chunk definition when you are running the code below.
+
+```{r}
+x.train <- model.matrix(Life.expectancy ~., train_df)
+y.train <- train_df$Life.expectancy
+x.test <- model.matrix(Life.expectancy ~., test_df)
+y.test <- test_df$Life.expectancy
+
+lambdas <- 10^seq(12, -6, length = 300)
+```
+
+<br>
+
+9. Build a ridge regression model using glmnet() using the training data and labels that you built in question 8.
++ For glmnet syntax information, refer to: https://www.rdocumentation.org/packages/glmnet/versions/3.0- 2/topics/glmnet
++ Note: You need to set alpha = 0 to indicate you want to run ridge regression.
+(3 points)
+```{r}
+ridge=glmnet(x.train,y.train,alpha = 0,lambda = lambdas)
+```
+
+
+
+10. Pick two $\lambda$ values from your vector of lambdas. Print the corresponding regression coefficients for the independent variables using the function coef(). Calculate and print the L2 norm corresponding to the two lambda values that you picked. What is the relationship between $\lambda$ and the L2 norm (e.g. when one increases, does the other increase or decrease)? (3 points)
+```{r}
+lam2=c(ridge$lambda[6],ridge$lambda[36])
+# print coefficients for independent variables (not include intercept)
+coef(ridge)[-c(1,2),6] #for the 6th
+coef(ridge)[-c(1,2),36] #for the 36th
+#L2
+L2=c(sqrt(sum(coef(ridge)[-c(1,2),6]^2)),sqrt(sum(coef(ridge)[-c(1,2),36]^2))) #delete the intercept for L2 penalty
+table= data.frame(lambda= lam2, L2 = L2)
+table
+
+```
+Based on the result, we can find that with increase in $\lambda$, the L2 norm will decrease.
+
+<br>
+
+
+11. The glmnet package has a built-in cross validation function. Use cv.glmnet() to run cross-validated on ridge regression so that you can choose the optimal value of lambda. What is the $\lambda$ value that gives rise to the ridge regression model with the minimal mean squared error (MSE), which we will define to be the best model for our purposes?
++ Note: Make sure you set.seed(2021)
++ Hint: accessing "lambda.min" outputs the value of $\lambda$ that gives the minimum mean cross-validated error.
++ For more information, see https://www.rdocumentation.org/packages/glmnet/versions/3.0-
+2/topics/cv.glmnet
++ Add a plot of the result from calling cv.glmnet(). What does this plot tell you?
+
+(5 points)
+```{r}
+set.seed(2021)
+cv.ridge=cv.glmnet(x.train,y.train,alpha = 0,lambda = lambdas)
+min_lambda=cv.ridge$lambda.min #minimum MSE with the lambda
+min_lambda
+paste("The lambda value that gives rise to the ridge regression model with the minimal MSE is:",min_lambda)
+plot(cv.ridge)
+```
+  
+This plot shows the cross-validation curve (red dotted line) along with upper and lower standard deviation curves along the $\lambda$ sequences, i.e., error bar. The left vertical dotted lines  indicates the vale if $\lambda$ gives minimum mean cross-validated error (here the x-axis is $Log\lambda$). And we can find here when $\lambda$ is large, the MSE is also very large. Here $\lambda=$ `r {min_lambda}` gives rise to the ridge regression model with the minimal MSE.
+
+<br>
+
+12. Use predict() from the glmnet package to test your model. Make sure you use the $\lambda$ derived from Question 11 and the test set. Calculate and print the mean squared error (MSE). (3 points)
++ Note: This predict() function is different from the one that we used in question 6.
++ For more information on the syntax, see
+https://www.rdocumentation.org/packages/glmnet/versions/1.1-1/topics/predict.glmnet
+```{r}
+pred.glm=predict(ridge,s=min_lambda,newx = x.test)
+MSE_ridge=sum((y.test-pred.glm)^2)/length(y.test)
+paste("The MSE is",MSE_ridge)
+```
+The MSE is `r {MSE_ridge}`.
+
+<br>
+
+13. Calculate and print the sum of squared residuals (or SSE) and the R-squared statistic for the test set, using the predicted values from the best ridge regression model. (3 points)
+```{r}
+SSE_ridge=sum((test_df$Life.expectancy - pred.glm)^2)
+SST_ridge=sum((test_df$Life.expectancy - mean(test_df$Life.expectancy))^2)
+R_sqaure_ridge=1-SSE_ridge/SST_ridge
+paste("The SSE is", SSE_ridge)
+paste("The R-squared statistic is",R_sqaure_ridge)
+```
+
+<br>
+
+14. Use coef() to print the regression coefficients of the final, best fit model using  $\lambda$  .min. Calculate and print its L2 norm. (3 points)
+```{r}
+# For the training datast
+best_ridge=glmnet(x.train, y.train, alpha = 0, lambda = min_lambda)
+coef(best_ridge)[-2,] #remove null intercept
+# L2
+L2_best=norm(coef(best_ridge)[-c(1,2)], type = "2")
+paste("The L2 norm is",L2_best)
+```
+
+<br>
+
+15. Are any of the independent variables not included in your ridge regression model? If so, which ones? Why do you think this is? (3 points)
+No, because using ridge regression will include all the variables in the final model and not remove and not select any variables actually. 
+
+<br>
+
+---
+
+## LASSO
+
+16. Like ridge regression, lasso also seeks coefficient estimates that fit the data well by minimizing the residual sum of squares (RSS). This regularization is done by adding an extra term to the original cost function: $RSS + \lambda \sum_{j=1}^p |\beta_j|$ Selecting a good value for $\lambda$ is critical for lasso as well. (2 points)
+
+First, build a lasso model using glmnet() using training data and labels from question 8.
+
++ For its syntax information: https://www.rdocumentation.org/packages/glmnet/versions/3.0-2/topics/glmnet
++ Note: You need to set alpha = 1 to indicate you want to run lasso.
++ Note: You should use the same lambdas array as you used previously
+```{r}
+lasso=glmnet(x.train,y.train,alpha = 1,lambda = lambdas)
+```
+
+<br>
+
+17. Use cv.glmnet() to run cross validation on lasso and determine the lambda that minimizes the MSE (which we will consider here to mean the best performing model). What is the $\lambda$ value that gives rise to the best performing lasso model? (5 points)
++ Note: Make sure you set.seed(2021)
++ Hint: $lambda$.min outputs value of $\lambda$ that gives minimum mean cross-validated error.
++ For more information, see https://www.rdocumentation.org/packages/glmnet/versions/3.0-2/topics/cv.glmnet
+```{r}
+set.seed(2021)
+cv.lasso=cv.glmnet(x.train,y.train,alpha = 1,lambda = lambdas)
+min_lambda_lasso=cv.lasso$lambda.min #minimum MSE with the lambda
+paste("The lambda value that gives rise to the ridge regression model with the minimal MSE is:",min_lambda_lasso)
+```
+
+
+<br>
+
+18. Use predict() from the glmnet package to test your model. Make sure you use the $\lambda$ derived from Question 17 and the test set. Calculate and print the mean squared error (MSE). (3 points)
++ For more information on the syntax, see https://www.rdocumentation.org/packages/glmnet/versions/1.1-1/topics/predict.glmnet
+```{r}
+pred.glm.lasso=predict(lasso,s=min_lambda_lasso,newx = x.test)
+MSE_lasso=mean((y.test-pred.glm.lasso)^2)
+paste("The MSE is",MSE_lasso)
+```
+
+<br>
+
+19. Calculate and print the sum of squared residuals (i.e. SSE) and the R-squared statistic for the test set, using the predicted values from the best lasso model. (5 points)
+```{r}
+SSE_lasso=sum((test_df$Life.expectancy - pred.glm.lasso)^2)
+SST_lasso=sum((test_df$Life.expectancy - mean(test_df$Life.expectancy))^2)
+R_sqaure_lasso=1-SSE_lasso/SST_lasso
+paste("The SSE is", SSE_lasso)
+paste("The R-squared statistic is",R_sqaure_lasso)
+```
+
+
+
+20. Use coef() to print the regression coefficients of the final, best fit model with best $\lambda$. Calculate and print its L1 norm. (2 points)
+```{r}
+best_lasso=glmnet(x.train, y.train, alpha = 1, lambda = min_lambda_lasso)
+coef(best_lasso)[-2,] #remove null intercept
+# L1
+L1=norm(as.matrix(coef(best_lasso)[-c(1,2)]), type = "1")
+paste("The L1 norm is",L1)
+#check again
+L1_1=sum(abs(coef(best_lasso)[-c(1,2),]))
+```
+
+<br>
+
+21. Are any of the independent variables not included in your lasso model? Why or why not? If so, which ones? (5 points)
+Yes. Because lasso regression can perform variable selection and can exactly shrink the coefficients of insignificant variables to 0. The variables `infant.deaths`, `Alcohol`, `Hepatitis.B`,`thinness..1.19.years` and `thinness.5.9.years` are not included in the lasso model.
+
+<br>
+
+---
+
+## Polynomial Regression 
+
+22. Use the lm() function to build a model that uses linear combinations of all features plus second degree features of them. (2 points)
+
++ Take a look at this following link for example, https://datascienceplus.com/fitting-polynomial-regression-r/
++ use summary() to print the summary of the polynomial regression output
+```{r}
+poly=lm(Life.expectancy ~ . + 
+                 I(Adult.Mortality ^2) + 
+                 I(infant.deaths^2) + 
+                 I(Alcohol^2) + 
+                 I(percentage.expenditure^2) + 
+                 I(Hepatitis.B^2) + 
+                 I(Measles^2) + 
+                 I(BMI ^2) + 
+                 I(under.five.deaths^2) + 
+                 I(Polio^2) + 
+                 I(Total.expenditure^2) + 
+                 I(Diphtheria^2) + 
+                 I(HIV.AIDS^2) +
+                 I(GDP ^2) + 
+                 I(Population^2) + 
+                 I(thinness..1.19.years^2) + 
+                 I(thinness.5.9.years^2) + 
+                 I(Income.composition.of.resources^2) + 
+                 I(Schooling^2) +
+                 I(developed^2),
+                 train_df
+)
+summary(poly)
+```
+
+<br>
+
+23. Use predict() to make a prediction on *Life.expectancy* for your test data using the trained polynomial regression model. Make sure you use the test set that you set aside in question 2. (3 points)
+```{r}
+pred.poly=predict(poly,test_df)
+```
+
+(i) Calculate and print the sum of squared residuals (i.e. SSE) for the test dataset.
+```{r}
+SSE_poly=sum((pred.poly-test_df$Life.expectancy)^2)
+paste("The SSE is:",SSE_poly)
+```
+
+<br>
+
+(ii) Calculate and print R-squared statistic. How does this compare to the R-squared statistic for the training data? Why do you think this is?
+```{r}
+SST_poly=sum((test_df$Life.expectancy - mean(test_df$Life.expectancy))^2)
+R_s_poly=1-SSE_poly/SST_poly
+paste("The R-squared statistic is",R_s_poly)
+```
+The $R^2$ for the test data is `r {R_s_poly}`, which is much lower compared to the R-squared statistic for the training data (0.9027 in summary()) since there might be overfitted situation in the training model.
+
+
+24. Run the following code to extract training and testing matrices of the predictors and the outcomes using the same formula as above.
++ Remember to remove eval = F in the R chunk definition when you are running the code below.
+
+```{r}
+
+x.train.poly <- model.matrix(Life.expectancy ~ . + 
+                 I(Adult.Mortality ^2) + 
+                 I(infant.deaths^2) + 
+                 I(Alcohol^2) + 
+                 I(percentage.expenditure^2) + 
+                 I(Hepatitis.B^2) + 
+                 I(Measles^2) + 
+                 I(BMI ^2) + 
+                 I(under.five.deaths^2) + 
+                 I(Polio^2) + 
+                 I(Total.expenditure^2) + 
+                 I(Diphtheria^2) + 
+                 I(HIV.AIDS^2) +
+                 I(GDP ^2) + 
+                 I(Population^2) + 
+                 I(thinness..1.19.years^2) + 
+                 I(thinness.5.9.years^2) + 
+                 I(Income.composition.of.resources^2) + 
+                 I(Schooling^2) +
+                 I(developed^2),
+                        train_df)
+y.train.poly <- train_df$Life.expectancy
+x.test.poly <- model.matrix(Life.expectancy ~ . + 
+                 I(Adult.Mortality ^2) + 
+                 I(infant.deaths^2) + 
+                 I(Alcohol^2) + 
+                 I(percentage.expenditure^2) + 
+                 I(Hepatitis.B^2) + 
+                 I(Measles^2) + 
+                 I(BMI ^2) + 
+                 I(under.five.deaths^2) + 
+                 I(Polio^2) + 
+                 I(Total.expenditure^2) + 
+                 I(Diphtheria^2) + 
+                 I(HIV.AIDS^2) +
+                 I(GDP ^2) + 
+                 I(Population^2) + 
+                 I(thinness..1.19.years^2) + 
+                 I(thinness.5.9.years^2) + 
+                 I(Income.composition.of.resources^2) + 
+                 I(Schooling^2) +
+                 I(developed^2), 
+                       test_df)
+y.test.poly <- test_df$Life.expectancy
+```
+
+
+25. Perform cross-validated ridge regression on the polynomial formula, similar to how linear ridge regression is performed question 11. Then calculate and print the mean squared error (MSE), the sum of squared residuals (SSE) and the R-squared statistic using the test dataset and the predicted scores based on the best polynomial regression model from the cross validation process. (10 points)
+```{r}
+set.seed(2021)
+#CV ridge regression
+cv_poly=cv.glmnet(x.train.poly, y.train.poly, alpha = 0, lambda = lambdas)
+min_lambda_poly=cv_poly$lambda.min
+#MSE, SSE, R-squared
+ridge_poly=glmnet(x.train.poly, y.train.poly, alpha = 0, lambda = lambdas)
+poly_r=predict(ridge_poly, s=min_lambda_poly, newx = x.test.poly)
+MSE_poly_r=sum((poly_r - y.test.poly)^2)/length(y.test.poly)
+SSE_poly_r= sum((poly_r - y.test.poly)^2)
+R_poly_r=1 - SSE_poly_r/SST_poly
+paste("The MSE is", MSE_poly_r)
+paste("The SSE is", SSE_poly_r)
+paste("The R-squared is", R_poly_r)
+```
+
+<br>
+
+---
+
+## Splines
+
+
+26. Take a look at this link to learn how to define the formula to train a natural spline:  https://www.rdocumentation.org/packages/splines/versions/3.6.2 
+Experiment yourself and specify a formula for a natural spline model.Train the model on the training set that we set aside in question 2. Print the summary of the resulting model. (5 points)
++ You should define the boundaries of the splines for any variable using bs()
++ You only need to define spline boundaries for interval or ordinal variables, not binary variables 
+```{r}
+spline=
+lm(Life.expectancy ~ bs(Adult.Mortality,df=6) +bs(infant.deaths,df=6) +bs(Alcohol,df=6) +bs(percentage.expenditure,df=6) +bs(Hepatitis.B,df=6)+bs(Measles,df=6)+
+bs(BMI,df=6)+bs(under.five.deaths,df=6) +bs(Polio,df=6)+bs(Total.expenditure,df=6)+
+bs(Diphtheria,df=6)+bs(HIV.AIDS,df=6)+bs(GDP,df=6)+bs(Population,df=6) +
+bs(thinness..1.19.years,df=6)+bs(thinness.5.9.years,df=6)+bs(Income.composition.of.resources,df=6)+
+bs(Schooling,df=6)+developed,data = train_df)
+summary(spline)
+```
+
+
+
+27. Use predict() to predict *Life.expectancy* using your natural spline model on the test dataset. Then calculate and print the sum of squared errors as well as the R-squared statistic. Is the testing R-squared statistic larger or smaller than that of the training set? (5 points)
+```{r}
+pred_spline= predict(spline,test_df)
+
+SSE_spline = sum((test_df$Life.expectancy-pred_spline)^2)
+paste('SSE is',round(SSE_spline,3))
+
+SST_spline = sum((test_df$Life.expectancy-mean(test_df$Life.expectancy))^2)
+R_spline=1-SSE_spline/SST_spline
+paste('R-squared statistic is',round(R_spline,3))
+```
+The testing R-squared statistic is smaller than that of the training set (0.9384 in summary()).  
+
+<br>
+
+---
+
+## Summary
+
+28. We have implemented and tested several regression models to predict *Life.expectancy*. What are your conclusions? Which model worked the best? Did regularization methods improve our multiple linear regression model? Which input variables contributed most / least to the prediction? Provide quantitative metrics to support your reasoning where applicable. (5 points)
+```{r}
+R_all=round(c(R_squared,R_sqaure_ridge,R_sqaure_lasso,R_s_poly,R_poly_r,R_spline),3)
+SSE_all=round(c(SSE,SSE_ridge,SSE_lasso,SSE_poly,SSE_poly_r,SSE_spline),3)
+Method=c("Linear","Ridge","LASSO","Polynomial","Polynomial with ridge","Spline")
+t1=cbind(Method,SSE_all,R_all)
+kable(t1,col.names = c("Method","SSE","R-squared"),caption = "Table 1. Summary of results")
+```
+Based on the Table 1, we find **Spline** works the best because it has the minimum SSE and maximum R-squared statistic here.  
+  
+And we find that for the regularization methods, ridge and lasso regression both do not improve our multiple regression model because their R-squared statistic are both smaller than which of multiple linear regression model, and SSE are both larger than which of multiple linear regression model. Only when performing cross-validated ridge regression on the polynomial formula, we improve the multiple linear regression model given R-squared and SSE values.  
+   
+Given the estimated result of multiple linear regression which is the simplest to explain, we find that the `Income.composition.of.resources` variable contributed most and the `Population` variable
+contributed least to the prediction.
+

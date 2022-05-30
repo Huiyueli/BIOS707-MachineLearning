@@ -1,0 +1,577 @@
+---
+title: "20211208_Li_Huiyue_HW4"
+author: "Huiyue Li"
+date: "20211208"
+output:
+  html_document:
+    df_print: paged
+---
+
+# BIOSTAT 707 Homework 4
+
+---
+
+*In this homework, the objectives are to*
+
+1. Implement a Logistic Regression classifier
+
+2. Implement a Linear Discriminant Analysis classifier
+
+3. Implement a Decision Tree classifier
+
+4. Implement a Random Forest classifier 
+
+5. Implement a Support Vector Machine classifier
+
+6. Evaluate the performance of different classification models in solving the same problem.
+
+Assignments will only be accepted in electronic format in knitted PDF files or PDF files converted from HTML files. **5 points will be deducted for every assignment submission that does not include the PDF file.** Your code should be adequately commented to clearly explain the steps you used to produce the analyses. PDF homework files should be uploaded to Gradescope with the naming convention date_lastname_firstname_HW[X].pdf. For example, my first homework assignment would be named 20210831_Dunn_Jessilyn_HW1.pdf. **It is important to note that 5 points will be deducted for every assignment that is named improperly.** Please add your answer to each question directly after the question prompt in  the homework .Rmd file template provided below.
+
+```{r message=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(lubridate)
+library(patchwork)
+library(gridExtra)
+library(psych)
+library(corrplot)
+library(ggfortify)
+library(factoextra)
+library(class) #knn
+library(gmodels) # CrossTable()
+library(caret) # creatFolds()
+library(caTools) #sample.split()
+library(ROCR) # prediction(), performance()
+library(tree)
+library(randomForest)
+library(e1071)
+library(MASS) # for LDA
+library(knitr)
+```
+
+## Dataset
+
+Heart Failure Clinical records dataset
+https://archive.ics.uci.edu/ml/datasets/Heart+failure+clinical+records
+
+## Data Preparation
+
+1. Load the CSV file titled "HW6_heart_disease_dataset.csv". How many rows are there in this dataset? How many columns are there in this dataset? 
+```{r}
+HD=read.csv("heart_failure_clinical_records_dataset.csv")
+row_n=nrow(HD) #row number
+col_n=ncol(HD) #column number
+row_n
+col_n
+```
+There are `r {row_n}` rows in the dataset and `r {col_n}` columns in the dataset.
+
+<br>
+
+2. Perform the following preprocessing steps:
++ Standardize the columns named *age*, *creatine_phosphokinase*, *ejection_fraction*, *platelets*, *serum_creatinine* and *serum_sodium*
++ Mutate the *DEATH_EVENT* column as a column of factors
++ Remove the *time* column in your final saved dataframe
++ Drop rows with NA values
+```{r}
+HD[,c(1,3,5,7,8,9)]=scale(HD[,c(1,3,5,7,8,9)]) #standardize
+HD1=HD%>%mutate(DEATH_EVENT=as.factor(DEATH_EVENT)) #mutate as factor
+HD2=HD1%>%dplyr::select(-time)#remove time
+HD_pre=HD2%>%na.omit() #remove NA
+```
+
+<br>
+
+3. Taking the train-test sample split code (using sample.split from caTools package) from previous HWs and split the dataset into a training set named "train_df" and a testing set named "test_df", where the training set contains 80% of all samples in this dataset. 
+
+**Note**: You should add set.seed(2021) at the beginning of your r-chunk whenever there’s potential randomness in your computation.
+```{r}
+set.seed(2021)
+split=sample.split(HD_pre$DEATH_EVENT,SplitRatio = 0.8) #using DEATH_EVENT
+train_df=subset(HD_pre,split==TRUE)
+test_df=subset(HD_pre,split==FALSE)
+```
+
+<br>
+
+---
+
+## Logistic Regression
+
+4. Run logistic regression on the training data from Question 4 above using glm(), whose function name abbreviates “generalized linear models” and is sometimes pronounced “glim”.
+- For its syntax, see https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/glm
+- Note: You should set family = binomial to let glm() know that you want to run logistic regression. Ensure that you understand why it is necessary to set this setting to binomial.
+```{r}
+train_df1=train_df
+log_ml=glm(DEATH_EVENT~.,data=train_df,family = binomial)
+```
+Because "family=binomial" tells the R that it's a binary outcome.
+
+<br>
+
+
+5. Print the output of your trained logistic regression model using the summary() function. How many independent variables are statistically significant in this model? Would you deploy this model for real-world use as it is? Why or why not?
+
+- Note: The number of asterisks in the last column of the table shows the significance.
+- Note: The “Signif. codes" section underneath the table shows which p-value range each code
+corresponds to.
+```{r}
+summary(log_ml)
+log_null=glm(DEATH_EVENT~1,data=train_df,family = binomial)
+pse_r=1-(logLik(log_ml)/logLik((log_null)))
+```
+There are 3 significant variables (p-value<0.05), i.e., `age`, `ejection_fraction`, `serum_creatinine` and `serum_sodium`.  
+(If significant level is 0.1, there might be 5 significant variables including `age`, `ejection_fraction`, `high_blood_pressure `,`serum_sodium  `,`serum_creatinine`) .  
+No, because among 11 variables, there are only five variables are significant in the model, which indicates there might be variable selection process. And the pseudo $R^2$ is `r {pse_r}` which is pretty small, so we will not deploy this model for real-world use.
+
+<br>
+
+
+6. Test your model using the test set from Question 4 above using predict().
+- For its syntax, see https://stat.ethz.ch/R-manual/R-devel/library/stats/html/predict.lm.html.
+- Note: You should set type = “response” to let predict() know that you want to test the
+model’s predictive power with your test dataset.
+- Note: The predict() function will output probabilities P(y = 1 | X). That is, the output will list probabilities that each subject is predicted to have a death event based on the model that you trained.
+- Here, we will assume that if this probability is > 0.5, then the predicted label is “death event occured”. Otherwise, the label is classified as “no death event”. This means that you will transform the output from predict() into binary values, which will be compared to real labels to calculate accuracy and error rates. What is a case where we might want to change the prediction threshold away from 0.5?
+```{r}
+pred_lm=predict(log_ml,test_df,type = "response")
+test_df_pred=cbind(test_df,pred_lm)
+#according to the label meaning (1:death event occured; 0: no death event)
+test_df_pred1=test_df_pred%>%mutate(resonse=if_else(pred_lm>0.5,1,0))
+test_df_pred1$resonse=as.factor(test_df_pred1$resonse)
+#compare
+test_df_pred_cmp=test_df_pred1%>%group_by(resonse,DEATH_EVENT)%>%summarise(n=n(),.groups = 'drop')
+test_df_pred_cmp=test_df_pred_cmp%>%filter(resonse==DEATH_EVENT)
+accuracy=sum(test_df_pred_cmp[,3])/nrow(test_df_pred1)
+error_rate=1-accuracy
+paste("The accuracy is",accuracy)
+paste("The error rate is",error_rate)
+```
+When we want to change the statistical properties, like improving accuracy, or controlling sensitivity and specificity, especially when there are imbalanced classification or if one class is more important than the other class, we might want to change the prediction threshold away from 0.5. 
+
+<br>
+
+
+7. Calculate and print the accuracy and error rate of your trained logistic regression model. How do you interpret this?
+```{r}
+accuracy=sum(test_df_pred_cmp[,3])/nrow(test_df_pred1)
+error_rate=1-accuracy
+paste("The accuracy of testing data is",accuracy)
+paste("The error rate of testing data is",error_rate)
+pred_train=predict(log_ml,train_df,type = "response")
+train_df_pred=cbind(train_df,pred_train)
+train_df_pred1=train_df_pred%>%mutate(resonse=if_else(pred_train>0.5,1,0))
+train_df_pred1$resonse=as.factor(train_df_pred1$resonse)
+train_df_pred_cmp=train_df_pred1%>%group_by(resonse,DEATH_EVENT)%>%summarise(n=n(),.groups = 'drop')%>%filter(DEATH_EVENT==resonse)
+accuracy1=sum(train_df_pred_cmp[,3])/nrow(train_df_pred1)
+error_rate1=1-accuracy1
+paste("The accuracy of training data is",accuracy1)
+paste("The error rate of training data is",error_rate1)
+```
+There are 78.3% observations in testing set are classified correctly, and 21.7% observations are classified wrongly by the logistic regression model.  
+The accuracy of the trained logistic regression model is lower than the accuracy of the test data set, which probably indicates that the training set do not get training quite as much as it could be.
+
+<br>
+
+8. Plot the ROC curve using prediction() and performance() from the ROCR package. Calculate and print the area under the ROC curve using performance(). Explain what your ROC curve results imply about your model.
+- For more information, see https://www.r-bloggers.com/a-small-introduction-to-the-rocr-package/
+```{r,fig.width=6,fig.height=5}
+pred_ROC=prediction(pred_lm,test_df$DEATH_EVENT)
+#curve
+perf_ROC=performance(pred_ROC,"tpr","fpr")
+perf_AUC=performance(pred_ROC,"auc")
+paste("The area under the ROC curve is", print(perf_AUC@y.values)) #AUC
+#plot
+plot(perf_ROC,lwd=3,col="orange1")
+title("The ROC curve (auc=0.809)")
+abline(a=0,b=1)
+legend("bottomright",paste("AUC:", round(as.numeric(perf_AUC@y.values), digits = 3)), col = c("orange1"), lwd=3)
+```
+  
+From this curve, we find it is closed to the top-left corner, and the AUC is `0.81>0.5`, which indicates there is a high chance that the model will be able to distinguish between the two classes of outcome variable, i.e., the model has a good performance.
+
+<br>
+
+
+---
+
+## Linear Discriminant Analysis
+
+9. Train a linear discriminant analysis (LDA) on the training dataset using the lda() function. 
+- For more information, please refer to https://www.rdocumentation.org/packages/MASS/versions/7.3-53/topics/lda
+```{r}
+lda_train=lda(DEATH_EVENT~.,data=train_df)
+```
+
+
+
+10. Evaluate your LDA by plotting the ROC curve using prediction() and performance() from the ROCR package. Calculate and print the area under the ROC curve using performance().
+```{r,fig.width=6,fig.height=5}
+#predict in testing set
+pred_lda=predict(lda_train,newdata = test_df)
+pred_lda_test=as.data.frame(pred_lda$posterior)
+#ROC
+pred_lda_ROC=prediction(pred_lda_test[,2],test_df$DEATH_EVENT)
+ROC_pref_lda=performance(pred_lda_ROC,"tpr","fpr")
+AUC_lda=performance(pred_lda_ROC,"auc")
+paste("The area under the ROC curve for LDA is", print(AUC_lda@y.values)) #AUC
+plot(ROC_pref_lda,lwd=3,col="orange1")
+title("The ROC curve (auc=0.810)")
+abline(a=0,b=1)
+legend("bottomright",paste("AUC:", round(as.numeric(AUC_lda@y.values), digits = 3)), col = c("orange1"), lwd=3)
+```
+  
+The area under the ROC curve for LDA is 0.8100128, which is slightly larger than the AUC when using logistic regression model (`0.8087291`).
+
+<br>
+
+---
+
+## Decision Trees
+
+11. Using the default settings of tree() from the "tree" package, build a decision tree using the training dataset to predict the outcome (i.e., DEATH_EVENT) using all predictors. Print the summary of the resulting trees. What's the misclassification error rate of this decision tree on the training dataset?
+```{r}
+tree_m=tree(DEATH_EVENT~.,data = train_df)
+summary(tree_m)
+```
+The misclassification error is `0.1757`.
+
+<br>
+
+12. Plot the tree:
++ call plot() on the resulting decision tree 
++ add text to the tree 
++ adjust the figure size so that the tree splits are clearly visible
+
+Use the plotted tree to answer the following questions:
+a) What's the depth of the tree?
+b) How many leaf nodes are there in this tree?
+```{r,fig.width=18,fig.height=10}
+plot(tree_m)
+text(tree_m,pretty = 0)
+title(main = "Unpruned Decision Tree")
+```
+The depth of the tree is `9`, and there are `20` leaf nodes in this tree.
+
+
+13. What is the misclassification error rate of this decision tree and what is the F1-score on the test data? You can use CrossTable() or any other method you prefer.
+
+Note: Decision trees can be pruned to achieve better results. Due to the restricted space in this homework, we are not going to prune the decision tree model here. You are encouraged to learn on your own how to prune decision tree models to achieve better performance from the textbook. 
+```{r}
+predict_dt=predict(tree_m,test_df,type="class")
+cm=as.data.frame(table(test_df$DEATH_EVENT,predict_dt))
+mis_err=1-sum(cm[which(cm$Var1==cm$predict_dt),3])/sum(cm[,3])
+#F1
+prec=cm[which(cm$Var1==cm$predict_dt & cm$Var1==1),3]/sum(cm[which(cm$predict_dt==1),3])#precision
+rec=cm[which(cm$Var1==cm$predict_dt & cm$Var1==1),3]/sum(cm[which(cm$Var1==1),3])#recall
+F1=2*(prec*rec)/(prec+rec)
+paste("misclassification error rate:",mis_err)
+paste("F1-score:",F1)
+```
+The misclassification error rate is `r {round(mis_err,3)}`, and F1-score is `r {round(F1,3)}`
+
+<br>
+
+14. In class, we mention that decision tree models can achieve a 100% training accuracy, but using the default settings in the tree() function does not produce one such model. The two arguments to change here are:
+
+minsize: the smallest allowed node size, a weighted quantity. 
+The default is 10.
+mindev: the within-node deviance.
+
+What quantities should these arguments be to produce a decision tree that perfectly fits the training data? Run a decision tree model on these values and print its summary to verify.
+```{r}
+prune_m= tree(DEATH_EVENT ~.,minsize = 1, mindev = 0, data = train_df)
+summary(prune_m)
+```
+minisize=`1` and minidev=`0`.
+
+<br>
+
+
+15. What is the error rate and F1 score of this decision tree model on the testing data that perfectly fits the training data? Is this model underfitting or overfitting or neither?
+```{r}
+predict_dt1=predict(prune_m,test_df,type="class")
+cm1=as.data.frame(table(test_df$DEATH_EVENT,predict_dt1))
+mis_err1=1-sum(cm1[which(cm1$Var1==cm1$predict_dt1),3])/sum(cm1[,3])
+#F1
+prec1=cm1[which(cm1$Var1==cm1$predict_dt1 & cm1$Var1==1),3]/sum(cm1[which(cm1$predict_dt1==1),3])#precision
+rec1=cm1[which(cm1$Var1==cm1$predict_dt1 & cm1$Var1==1),3]/sum(cm1[which(cm1$Var1==1),3])#recall
+F1_1=2*(prec1*rec1)/(prec1+rec1)
+paste("misclassification error rate:",mis_err1)
+paste("F1-score:",F1_1)
+```
+The misclassification error rate is `r {round(mis_err1,3)}`, and F1-score is `r {round(F1_1,3)}`.  
+Overfittting. Because the misclassification error rate of testing data is higher than which of training data.
+
+<br>
+
+
+16. Now let's prune the tree by running cv.tree() with the "FUN" argument defined to be prune.misclass, which means that we would like to prune the tree based on misclassification rates. You should prune the tree that's trained using the default values in tree(). Note: add set.seed(2021) at the beginning of your code.
+```{r}
+set.seed(2021)
+cv_m=cv.tree(tree_m,FUN=prune.misclass)
+```
+
+<br>
+
+17. Generate a plot of the cross-validated misclassification error rate (stored in the dev field of the output of the cv.tree() function) against the number of terminal nodes in the tree. 
+Note: dev corresponds to the cross-validated error rate in this instance. The size is the number of terminal nodes. 
+```{r, fig.width=8,fig.height=6}
+plot(cv_m$size,cv_m$dev/nrow(train_df),xlab="The number of terminal nodes",ylab="Misclssification error rate",type="b")
+title("The cross-validated misclassification error rate v.s. Tree size")
+```
+
+
+
+18. From the plots above, select the number of terminal nodes in the tree that seems most appropriate to you. (You can simply select the tree with the best performance and obtain the terminal nodes from that decision tree model. Note that everyone’s best tree could be different due to different randomness and different computing environments.) Remember that it's not always the case that the more terminal nodes we have, the better the tree performs on the testing data. Why not? Ultimately, we aim to jointly minimize the number of terminal nodes and the misclassification error rate on the training data. In other words, you should try to find the number of terminal nodes that correspond to the "elbow" point. Use prune.misclass() method to prune the tree and specify the number of terminal nodes you want. And then plot the pruned tree. Remember to set seed.
+```{r}
+set.seed(2021)
+tree_best=prune.misclass(tree_m,best=4)
+summary(tree_best)
+```
+Terminal nodes=4 seems the most appropriate.  
+Because when the case that the more terminal nodes we have, there might be overfitting situation, then the tree performs on the testing data will not always better.
+
+<br>
+
+19. Now test the performance of your pruned tree on the test data using the predict function to output the predicted class. Then calculate the error rate and the F1-score. What do you see?
++ specify the type of output in the predict() function to be "class"
+```{r}
+pre_best=predict(tree_best,test_df,type = "class")
+cm2=as.data.frame(table(test_df$DEATH_EVENT,pre_best))
+mis_err2=1-sum(cm2[which(cm2$Var1==cm2$pre_best),3])/sum(cm2[,3])
+prec2=cm2[which(cm2$Var1==cm2$pre_best & cm2$Var1==1),3]/sum(cm2[which(cm2$pre_best==1),3])#precision
+rec2=cm2[which(cm2$Var1==cm2$pre_best & cm2$Var1==1),3]/sum(cm2[which(cm2$Var1==1),3])#recall
+F1_2=2*(prec2*rec2)/(prec2+rec2)
+paste("misclassification error rate:",mis_err2)
+paste("F1-score:",F1_2)
+```
+The misclassification error rate is `r {round(mis_err2,3)}`, and F1-score is `r {round(F1_2,3)}`.   
+The error rate decreased and the F1-score increased when pruning the tree.  
+Here the misclassification error rates of testing data is much closed to which of the training data, and which is the same as the error rate of the decision tree model on the testing data that perfectly fits the training data (Q15), but there might be no overfitting problem, as well as no underfitting issue.
+
+<br>
+
+## Random Forest
+
+20. Now let's train a Random Forest model using the training data. 
++ the function to use is randomForest()
++ set the number of trees to be 100
++ set the number of predictors to be used at each split to be 6
++ set the "importance" argument to be TRUE so that the relative importance of each of the predictors is assessed
+```{r}
+set.seed(2021)
+forest_m=randomForest(DEATH_EVENT~.,data=train_df,ntrees=100,mtry=6,importance=T)
+forest_m
+```
+
+<br>
+
+21. Print the relative (or comparative) importance plot of all predictors by calling importance() on the trained random forest model. What is the most important predictor in terms of mean decrease in the Gini Index?  (Gini index or Gini impurity measures the degree or probability of a particular variable being wrongly classified when it is randomly chosen; for further details, please refer to lecture slides.)
+```{r,fig.width=16,fig.height=8}
+importance(forest_m)
+varImpPlot(forest_m,main = "The importance plot for Random Forest")
+```
+The most important predictor in terms of mean decrease in the Gini Index is `ejection_fraction`, then is `serum_creatinine`.
+
+<br>
+
+
+22. Predict the outcome “DEATH_EVENT” using the random forest model from the previous question on the testing dataset. Calculate the misclassification error rate and the F1-score by comparing the test set predictions to the true outcomes from the test dataset.
+```{r}
+pre_for=predict(forest_m,test_df,type = "class")
+cm3=as.data.frame(table(test_df$DEATH_EVENT,pre_for))
+mis_err3=1-sum(cm3[which(cm3$Var1==cm3$pre_for),3])/sum(cm3[,3])
+prec3=cm3[which(cm3$Var1==cm3$pre_for & cm3$Var1==1),3]/sum(cm3[which(cm3$pre_for==1),3])#precision
+rec3=cm3[which(cm3$Var1==cm3$pre_for & cm3$Var1==1),3]/sum(cm3[which(cm3$Var1==1),3])#recall
+F1_3=2*(prec3*rec3)/(prec3+rec3)
+paste("misclassification error rate:",mis_err3)
+paste("F1-score:",F1_3)
+```
+The misclassification error rate is `r {round(mis_err3,3)}`, and F1-score is `r {round(F1_3,3)}`.   
+
+<br>
+
+23. Use a repeated cross-validation scheme on the training dataset to compare random forest models with different numbers of predictors considered at each split:
++ you need to generate a "trainControl" object with 10-fold cross-validation and 3 repeats for each fold
++ the number of predictors to consider at each split can be between 1 and 6, where 6 is the total number of available predictors
++ set the metric of comparison to be "Accuracy"
++ plot Accuracy values against the number of randomly selected predictors 
+```{r,fig.width=6,fig.height=5}
+set.seed(2021)
+train_control= trainControl(method = "repeatedcv",number =10, repeats = 3)
+tunegrid=expand.grid(.mtry = c(1:6))
+metric="Accuracy"
+rf_cv=train(DEATH_EVENT~.,train_df,method = "rf",metric =metric,trControl = train_control,tuneGrid = tunegrid,ntree=100)
+print(rf_cv)
+plot(rf_cv,main="Accuracy v.s. Predictors")
+```
+
+<br>
+
+24. Viewing the plot you generated above, what is the best number of predictors to consider at each split? Now train a new random forest using that number. Generate predicted labels on the testing dataset and calculate the error rate and F1-scores. Plot the relative importance of the predictors.
++ set the number of trees in the forest to be 100
++ turn on predictor importance analysis
++ remember to set seed
+```{r,fig.width=8,fig.height=5}
+set.seed(2021)
+best_for=randomForest(DEATH_EVENT~.,data=train_df,mtry=3,ntree=100)
+pre_forb=predict(best_for,test_df,type = "class")
+cm3b=as.data.frame(table(test_df$DEATH_EVENT,pre_forb))
+mis_err3b=1-sum(cm3b[which(cm3b$Var1==cm3b$pre_forb),3])/sum(cm3b[,3])
+prec3b=cm3b[which(cm3b$Var1==cm3b$pre_for & cm3b$Var1==1),3]/sum(cm3b[which(cm3b$pre_forb==1),3])#precision
+rec3b=cm3b[which(cm3b$Var1==cm3b$pre_forb & cm3b$Var1==1),3]/sum(cm3b[which(cm3b$Var1==1),3])#recall
+F1_3b=2*(prec3b*rec3b)/(prec3b+rec3b)
+paste("misclassification error rate:",mis_err3b)
+paste("F1-score:",F1_3b)
+#importance
+importance(best_for)
+varImpPlot(best_for,main = "The importance plot for best Random Forest")
+```
+  
+The best number pf predictors is `3`. The misclassification error rate is `r {round(mis_err3b,3)}`, and F1-score is `r {round(F1_3b,3)}`. And The most important predictor in terms of mean decrease in the Gini Index is `serum_creatinine`, then is `ejection_fraction`.
+
+<br>
+
+25. Generate the ROC curve for the random forest model you just built. The process is similar to what you did in previous HWs. What is the ROC of the AUC (also known as the AUROC)?
+```{r,,fig.width=6,fig.height=5}
+pred_fb=predict(best_for,test_df,type="prob")
+pred_ROC1=prediction(pred_fb[,2],test_df$DEATH_EVENT)
+perf_ROC1=performance(pred_ROC1,"tpr","fpr")
+perf_AUC1=performance(pred_ROC1,"auc")
+paste("The area under the ROC curve is", print(perf_AUC1@y.values)) #AUC
+#plot
+plot(perf_ROC1,lwd=3,col="orange1")
+title("The ROC curve (auc=0.814)")
+abline(a=0,b=1)
+legend("bottomright",paste("AUC:", round(as.numeric(perf_AUC1@y.values), digits = 3)), col = c("orange1"), lwd=3)
+```
+  
+The area under the receiver operating characteristic (AUROC) is a performance metric that you can use to evaluate classification models. The ROC varies from 0 to 1. The greater the ROC is, the model has better performance.
+
+## SVM classifier
+
+26. Train a support vector machine (SVM) model using a linear kernel and plot a 2D representation of the classifier.
++ set the cost argument (cost of constraint violations) to be 100, arbitrarily chosen so that everyone may have similar answers.
++ set the scale argument to FALSE, since we have already standardized the dataset.
++ when plotting the SVM model, you can arbitrarily select 2 predictors that you think are the most important using your domain knowledge. The purpose is just for visualization and seeing the classifier boundary. The plot should be done on the training dataset.
+```{r,fig.width=8,fig.height=6}
+set.seed(2021)
+svm.m=svm(DEATH_EVENT~.,data = train_df,kernel="linear",cost=100,scale=F)
+plot(svm.m,data=train_df,ejection_fraction ~ serum_creatinine)
+```
+
+<br>
+
+27. With a 10-fold cross-validation (CV), tune the cost parameter: cost_list = c(0.001, 0.01, 0.1, 1, 5, 10, 100) and print a summary of the CV result.
+```{r}
+set.seed(2021)
+tune.control(cross=10)
+svm_cv=tune(svm,DEATH_EVENT~.,data=train_df,kernel="linear",ranges = list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)),scale=F)
+summary(svm_cv)
+```
+
+<br>
+
+28. Select the best trained model from the CV folds based on training accuracy, and calculate the error rate and F1-score on the testing data.
+```{r}
+svm_best=svm_cv$best.model
+pre_sb=predict(svm_best,test_df,type="class")
+cm4=as.data.frame(table(test_df$DEATH_EVENT,pre_sb))
+mis_err4=1-sum(cm4[which(cm4$Var1==cm4$pre_sb),3])/sum(cm4[,3])
+prec4=cm4[which(cm4$Var1==cm4$pre_sb & cm4$Var1==1),3]/sum(cm4[which(cm4$pre_sb==1),3])#precision
+rec4=cm4[which(cm4$Var1==cm4$pre_sb & cm4$Var1==1),3]/sum(cm4[which(cm4$Var1==1),3])#recall
+F1_4=2*(prec4*rec4)/(prec4+rec4)
+paste("misclassification error rate:",mis_err4)
+paste("F1-score:",F1_4)
+```
+The misclassification error rate is `r {round(mis_err4,3)}`, and F1-score is `r {round(F1_4,3)}`
+
+<br>
+
+29. Tune the SVM model with a radial basis kernel using the following tuning values:
++ cost_list = c(0.1,1,10,100,1000)
++ gamma_list =c(0.5,1,2,3,4)
+and generate a summary of the cross-validation results, focusing on accuracy. The radial basis kernel transforms the original data space using Gaussian kernels, allowing the decision boundary to be circular or bubble-like, where each bubble need not connect with any other bubble. You can see why this could easily overfit the training data: just imagine an algorithm drawing a tight circle around each training dataset and having 100% accuracy.
+
+Note: gamma is the free parameter in the radial basis kernel and the cost function is the soft margin cost.
+```{r}
+set.seed(2021)
+svm_radial=tune(svm,DEATH_EVENT~.,data=train_df,kernel="radial",
+                ranges=list(cost= c(0.1,1,10,100,1000),gamma=c(0.5,1,2,3,4)),scale=F)
+summary(svm_radial)
+```
+
+
+<br>
+
+30. Select the best SVM  model from your tune object with the radial basis kernel and print a 2D representation of it. You can arbitrarily select the 2 predictors that you think are the most important based on your domain knowledge of the problem. The purpose is just for visualization and seeing the classifier boundary. The plot should be made on the training dataset, and you can see how the decision boundary performs for the training data. 
+```{r,fig.width=8,fig.height=6}
+svm_rad_best=svm_radial$best.model
+summary(svm_rad_best)
+plot(svm_rad_best,data=train_df,ejection_fraction ~ serum_creatinine)
+```
+
+<br>
+
+31. Calculate the training and testing misclassification error rates and F1-scores. Is there overfitting in the SVM model using the radial basis kernel? If yes, how do you know?
+```{r}
+# train
+pre_svm=predict(svm_rad_best,train_df,type = "class")
+cm5=as.data.frame(table(train_df$DEATH_EVENT,pre_svm))
+mis_err5=1-sum(cm5[which(cm5$Var1==cm5$pre_svm),3])/sum(cm5[,3])
+prec5=cm5[which(cm5$Var1==cm5$pre_svm & cm5$Var1==1),3]/sum(cm5[which(cm5$pre_svm==1),3])#precision
+rec5=cm5[which(cm5$Var1==cm5$pre_svm & cm5$Var1==1),3]/sum(cm5[which(cm5$Var1==1),3])#recall
+F1_5=2*(prec5*rec5)/(prec5+rec5)
+paste("misclassification error rate of traing set:",mis_err5)
+paste("F1-score of training set:",F1_5)
+# test
+pre_svm1=predict(svm_rad_best,test_df,type = "class")
+cm6=as.data.frame(table(test_df$DEATH_EVENT,pre_svm1))
+mis_err6=1-sum(cm6[which(cm6$Var1==cm6$pre_svm1),3])/sum(cm6[,3])
+prec6=cm6[which(cm6$Var1==cm6$pre_svm1 & cm6$Var1==1),3]/sum(cm6[which(cm6$pre_svm1==1),3])#precision
+rec6=cm6[which(cm6$Var1==cm6$pre_svm1 & cm6$Var1==1),3]/sum(cm6[which(cm6$Var1==1),3])#recall
+F1_6=2*(prec6*rec6)/(prec6+rec6)
+paste("misclassification error rate of testing set:",mis_err6)
+paste("F1-score of testing set:",F1_6)
+```
+Yes, because the error rate of training set is much smaller than which of testing set, and the F1-score of training set is much larger than which of testing set.
+
+<br>
+
+## Overall evaluation for classification algorithms
+
+32. From all of the classification algorithms we tested in this HW assignment, which is the best one? Answer this question based on the misclassification error rate and the F1-score, and whether there is overfitting occurring. You may discuss the pros and cons of each of the algorithms that we tested to show your logic.
+```{r}
+#f1 for log
+cm7=test_df_pred1%>%group_by(DEATH_EVENT,resonse)%>%summarise(n=n(),.groups = 'drop')
+prec7=cm7[which(cm7$DEATH_EVENT==cm7$resonse & cm7$DEATH_EVENT==1),3]/sum(cm7[which(cm7$resonse==1),3])#precision
+rec7=cm7[which(cm7$DEATH_EVENT==cm7$resonse & cm7$DEATH_EVENT==1),3]/sum(cm7[which(cm7$DEATH_EVENT==1),3])#recall
+F1_7=as.numeric(2*(prec7*rec7)/(prec7+rec7))
+
+#mis error for lda
+cm8=test_df%>%mutate(r1=pred_lda_test[,2],resonse=if_else(r1>0.5,"1","0"))%>%group_by(DEATH_EVENT,resonse)%>%summarise(n=n(),.groups = 'drop')
+mis_err8=1-sum(cm8[which(cm8$resonse==cm8$DEATH_EVENT),3])/sum(cm8[,3])
+#f1 for lda
+prec8=cm8[which(cm8$DEATH_EVENT==cm8$resonse & cm8$DEATH_EVENT==1),3]/sum(cm8[which(cm8$resonse==1),3])#precision
+rec8=cm8[which(cm8$DEATH_EVENT==cm8$resonse & cm8$DEATH_EVENT==1),3]/sum(cm8[which(cm8$DEATH_EVENT==1),3])#recall
+F1_8=as.numeric(2*(prec8*rec8)/(prec8+rec8))
+
+#overfitting for lda
+pred_lda1=predict(lda_train,newdata = train_df)
+pred_lda_test1=as.data.frame(pred_lda1$posterior)
+cm9=train_df%>%mutate(r1=pred_lda_test1[,2],resonse=if_else(r1>0.5,"1","0"))%>%group_by(DEATH_EVENT,resonse)%>%summarise(n=n(),.groups = 'drop')
+mis_err9=1-sum(cm9[which(cm9$resonse==cm9$DEATH_EVENT),3])/sum(cm9[,3])
+prec9=cm9[which(cm9$DEATH_EVENT==cm9$resonse & cm9$DEATH_EVENT==1),3]/sum(cm9[which(cm9$resonse==1),3])#precision
+rec9=cm9[which(cm9$DEATH_EVENT==cm9$resonse & cm9$DEATH_EVENT==1),3]/sum(cm9[which(cm9$DEATH_EVENT==1),3])#recall
+F1_9=as.numeric(2*(prec9*rec9)/(prec9+rec9))
+# no overfitting
+
+Method=c("Logistic regression","LDA","Decision Tree","Decision Tree perfectly fit the traing set","Decision Tree with pruned","Random Forest","Random Forest with CV","SVM (linear)","SVM (radial)")
+Misclassfication=round(c(error_rate,mis_err8,mis_err,mis_err1,mis_err2,mis_err3,mis_err3b,mis_err4,mis_err6),3)
+F1.score=round(c(F1_7,F1_8,F1,F1_1,F1_2,F1_3,F1_3b,F1_4,F1_6),3)
+result=cbind(Method,Misclassfication,F1.score)
+kable(result,caption="Comparison of methods")
+```
+LDA is the best one. Because it has the lowest misclassification error rate and second highest F1-score. The F1-score of LDA is only smaller by 0.01 than the highest F1-score. And there is no overfitting  occurring since the misclasssification error rate of training set is larger than which of testing set, F1-score of training set is smaller than which of testing set by LDA.
+

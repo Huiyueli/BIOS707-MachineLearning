@@ -1,0 +1,405 @@
+---
+title: "707_HW1"
+author: "Huiyue Li"
+date: "9/17/2021"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message=FALSE,warning=FALSE)
+```
+
+```{r  package}
+#load package
+library(tidyverse)
+library(lubridate)
+library(patchwork)
+library(knitr)
+library(DescTools)
+library(corrplot)
+library(gridExtra)
+```
+
+---
+  
+## Shell Scripting
+### Question 1
+```{bash upload, eval=F}
+# Upload in local
+scp owid-covid-data.csv.gz hl385@dcc-login.oit.duke.edu:.
+# Check in DCC
+ssh hl385@dcc-login.oit.duke.edu
+ls
+```
+MyFirstGit  Myclone    hello.sh   hi        out.txt                 script.sh  
+MyTestDir   error.txt  hello.txt  myFolder  **owid-covid-data.csv.gz**  slurm-17544322.out
+
+<br>
+
+### Question 2
+**(1)** First 5 lines
+```{bash first 5 lines, eval=F}
+# use gzcat in local, use zcat instead of gzcat in ssh to get the same result
+gzcat owid-covid-data.csv.gz|head -5 
+```
+    iso_code,continent,location,date,total_cases,new_cases,new_cases_smoothed,total_deaths,new_deaths,new_deaths_smoothed,total_cases_per_million,new_cases_per_million,new_cases_smoothed_per_million,total_deaths_per_million,new_deaths_per_million,new_deaths_smoothed_per_million,reproduction_rate,icu_patients,icu_patients_per_million,hosp_patients,hosp_patients_per_million,weekly_icu_admissions,weekly_icu_admissions_per_million,weekly_hosp_admissions,weekly_hosp_admissions_per_million,new_tests,total_tests,total_tests_per_thousand,new_tests_per_thousand,new_tests_smoothed,new_tests_smoothed_per_thousand,positive_rate,tests_per_case,tests_units,total_vaccinations,people_vaccinated,people_fully_vaccinated,total_boosters,new_vaccinations,new_vaccinations_smoothed,total_vaccinations_per_hundred,people_vaccinated_per_hundred,people_fully_vaccinated_per_hundred,total_boosters_per_hundred,new_vaccinations_smoothed_per_million,stringency_index,population,population_density,median_age,aged_65_older,aged_70_older,gdp_per_capita,extreme_poverty,cardiovasc_death_rate,diabetes_prevalence,female_smokers,male_smokers,handwashing_facilities,hospital_beds_per_thousand,life_expectancy,human_development_index,excess_mortality
+    AFG,Asia,Afghanistan,2020-02-24,1.0,1.0,,,,,0.026,0.026,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,8.33,38928341.0,54.422,18.6,2.581,1.337,1803.987,,597.029,9.59,,,37.746,0.5,64.83,0.511,
+    AFG,Asia,Afghanistan,2020-02-25,1.0,0.0,,,,,0.026,0.0,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,8.33,38928341.0,54.422,18.6,2.581,1.337,1803.987,,597.029,9.59,,,37.746,0.5,64.83,0.511,
+    AFG,Asia,Afghanistan,2020-02-26,1.0,0.0,,,,,0.026,0.0,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,8.33,38928341.0,54.422,18.6,2.581,1.337,1803.987,,597.029,9.59,,,37.746,0.5,64.83,0.511,
+    AFG,Asia,Afghanistan,2020-02-27,1.0,0.0,,,,,0.026,0.0,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,8.33,38928341.0,54.422,18.6,2.581,1.337,1803.987,,597.029,9.59,,,37.746,0.5,64.83,0.511,
+
+<br>
+
+**(2)** Last 5 lines
+```{bash last 5 lines, eval=F}
+gzcat owid-covid-data.csv.gz|tail -5 
+```
+    ZWE,Africa,Zimbabwe,2021-08-08,116327.0,437.0,968.714,3900.0,74.0,45.286,7826.655,29.402,65.177,262.398,4.979,3.047,0.72,,,,,,,,,5215.0,1019127.0,68.568,0.351,7379.0,0.496,0.131,7.6,tests performed,2886551.0,1863913.0,1022638.0,,33154.0,61908.0,19.42,12.54,6.88,,4165.0,,14862927.0,42.729,19.6,2.822,1.882,1899.775,21.4,307.846,1.82,1.6,30.7,36.791,1.7,61.49,0.571,
+    ZWE,Africa,Zimbabwe,2021-08-09,116853.0,526.0,856.857,3919.0,19.0,40.571,7862.045,35.39,57.651,263.676,1.278,2.73,0.71,,,,,,,,,3369.0,1022496.0,68.795,0.227,7105.0,0.478,0.121,8.3,tests performed,2941508.0,1897123.0,1044385.0,,54957.0,66884.0,19.79,12.76,7.03,,4500.0,,14862927.0,42.729,19.6,2.822,1.882,1899.775,21.4,307.846,1.82,1.6,30.7,36.791,1.7,61.49,0.571,
+    ZWE,Africa,Zimbabwe,2021-08-10,117258.0,405.0,689.0,3950.0,31.0,39.143,7889.294,27.249,46.357,265.762,2.086,2.634,0.7,,,,,,,,,2631.0,1025127.0,68.972,0.177,5909.0,0.398,0.117,8.6,tests performed,,,,,,53633.0,,,,,3609.0,,14862927.0,42.729,19.6,2.822,1.882,1899.775,21.4,307.846,1.82,1.6,30.7,36.791,1.7,61.49,0.571,
+    ZWE,Africa,Zimbabwe,2021-08-11,117954.0,696.0,632.571,3991.0,41.0,40.0,7936.122,46.828,42.56,268.52,2.759,2.691,,,,,,,,,,6182.0,1031309.0,69.388,0.416,5524.0,0.372,0.115,8.7,tests performed,3017341.0,1932929.0,1084412.0,,,59050.0,20.3,13.01,7.3,,3973.0,,14862927.0,42.729,19.6,2.822,1.882,1899.775,21.4,307.846,1.82,1.6,30.7,36.791,1.7,61.49,0.571,
+    ZWE,Africa,Zimbabwe,2021-08-12,118754.0,800.0,609.286,4047.0,56.0,41.857,7989.947,53.825,40.994,272.288,3.768,2.816,,,,,,,,,,,,,,,,,,,3098542.0,1966321.0,1132221.0,,81201.0,44935.0,20.85,13.23,7.62,,3023.0,,14862927.0,42.729,19.6,2.822,1.882,1899.775,21.4,307.846,1.82,1.6,30.7,36.791,1.7,61.49,0.571,
+
+<br>
+
+### Question 3
+```{bash line, eval=F}
+# How many lines
+gzcat owid-covid-data.csv.gz|wc -l
+```
+There are 109101 rows.
+
+<br>
+
+### Question 4
+```{bash unzip,eval=F}
+# Unzip without deleting
+gunzip -k owid-covid-data.csv.gz
+
+
+# Check
+ls
+```
+MyFirstGit  Myclone    hello.sh   hi        out.txt              **owid-covid-data.csv.gz**  slurm-17544322.out  
+MyTestDir   error.txt  hello.txt  myFolder  **owid-covid-data.csv**  script.sh
+
+<br>
+
+<br>
+
+<br>
+
+<br>
+
+<br>
+
+### Question 5
+```{bash Italy, eval=F}
+#find the specific line: use grep for the whole dataset
+grep -h  "Italy" owid-covid-data.csv
+#count:only use grep for the whole dataset
+grep -c  "Italy" owid-covid-data.csv
+#count: use grep with cat and cut to only check the column which is the country name
+cat owid-covid-data.csv | cut -d',' -f3|grep -c "Italy"
+```
+560 lines that contain the word "Italy"
+
+<br>
+
+### Question 6
+```{bash uniq, eval=F}
+# number of fields (columns) 
+ awk -F ',' '{print NF;exit}' owid-covid-data.csv
+ # number of rows
+ awk 'END {print NR}' owid-covid-data.csv
+ # which indicates country (upload the file in local firstly)
+ scp owid-covid-codebook.csv  hl385@dcc-login.oit.duke.edu:.
+ grep 'country' -h owid-covid-codebook.csv|cut -d ',' -f1
+ # uniq countries
+awk -F ',' '{print $1}' owid-covid-data.csv |sort|uniq|wc -l
+```
+Results: 62 109101 iso_code 233  
+**(1)** For "owid-covid-data.csv", there are 62 fields (columns).   
+**(2)** For "owid-covid-data.csv", there are 109101 rows including the row names.   
+**(3)** Based on the “owid_covid_codebook.csv”, we would know that the first column "iso_code" can indicate the country. There are 233 unique countries.
+
+<br>
+
+### Question 7
+```{bash sort,eval=F}
+#find the date
+awk -F ','  '{if($1=="USA") print $4,$6}'  owid-covid-data.csv|sort -n -k2|tail -1|cut -d ' ' -f1 
+```
+Result: 2021-01-02
+
+<br>
+
+---
+
+## Working with Dates and EDA
+### Question 8
+```{bash download,eval=F}
+# exit DCC then download the .csv from DCC to local
+scp hl385@dcc-login.oit.duke.edu:owid-covid-data.csv .
+```
+
+```{r data}
+#move the .csv to work directory then read the .csv
+df1=read.csv("owid-covid-data.csv")
+covid_df=df1%>%select(iso_code,continent, location, date, population, total_cases, new_cases, total_deaths, new_deaths,total_cases_per_million ,new_cases_per_million, total_deaths_per_million, new_deaths_per_million, positive_rate,total_vaccinations, people_vaccinated, people_fully_vaccinated)
+```
+
+<br>
+
+### Question 9
+```{r date}
+# Convert to POSIXct date-time object
+Date=parse_date_time(covid_df$date,"ymd")
+
+#Replace the date column
+covid_df$date=Date
+```
+
+
+### Question 10
+```{r plot1}
+# only USA
+df2=covid_df%>%filter(iso_code=="USA")%>%select(new_cases_per_million, new_deaths_per_million, positive_rate, people_fully_vaccinated,date,iso_code)
+# label
+df2$p1t=paste(paste("Highest Value",paste(df2$date,df2$new_cases_per_million, sep=", "),sep=": ("),")",sep = "")
+df2$p2t=paste(paste("Highest Value",paste(df2$date,df2$new_deaths_per_million, sep=", "),sep=": ("),")",sep = "")
+df2$p3t=paste(paste("Highest Value",paste(df2$date,df2$positive_rate, sep=", "),sep=": ("),")",sep = "")
+df2$p4t=paste(paste("Highest Value",paste(df2$date,df2$people_fully_vaccinated, sep=", "),sep=": ("),")",sep = "")
+```
+
+
+```{r plot2,fig.width=8,fig.height=24.5}
+# plot
+p1=ggplot(df2, aes(x =date, y = new_cases_per_million)) + 
+  geom_point(size=1,alpha=.8,shape=1,colour="salmon") +
+  geom_point(data=df2[which.max(df2$new_cases_per_million),],
+             size=1,alpha=1,shape=4,colour="black")+
+  geom_line(alpha=0.55,colour="salmon")+xlab("Date")+ ylab("New confirmed cases (per 1,000,000 people)") + 
+  ggtitle("The Trend of New Cases Per Million")+ 
+  geom_text(data = df2[which.max(df2$new_cases_per_million),], aes(date,new_cases_per_million,label=p1t),vjust=0.40,hjust=1.1,size=4.5)+
+  theme_bw()+ 
+  theme(axis.text=element_text(size=9),axis.title=element_text(size=10,face="bold"),title = element_text(size = 10,face = "bold"))
+  
+
+p2=ggplot(df2, aes(x =date , y = new_deaths_per_million)) + 
+  geom_point(size=1,alpha=.8,shape=1,colour="goldenrod1") +
+  geom_point(data=df2[which.max(df2$new_deaths_per_million),],
+             size=1,alpha=1,shape=4,colour="black")+
+  geom_line(alpha=0.55,colour="goldenrod1")+xlab("Date")+ ylab("New deaths attributed to COVID-19 (per 1,000,000 people)") + ggtitle("The Trend of New Deaths Per Million")+
+  geom_text(data = df2[which.max(df2$new_deaths_per_million),], aes(date,new_deaths_per_million,label=p2t),vjust=0.40,hjust=1.1,size=4.5)+
+  theme_bw()+ 
+  theme(axis.text=element_text(size=9),axis.title=element_text(size=10,face="bold"),title = element_text(size = 10,face = "bold"))
+
+
+p3=ggplot(df2, aes(x =date , y =positive_rate )) + 
+  geom_point(size=1,alpha=.8,shape=1,colour="cornflowerblue") +
+  geom_point(data=df2[which.max(df2$positive_rate),],
+             size=1,alpha=1,shape=4,colour="black")+
+  geom_line(alpha=0.55,colour="cornflowerblue")+xlab("Date")+ ylab("Positive rate given as a rolling 7-day average") + ggtitle("The Trend of Positive Rate on COVID-19 Test")+
+  geom_text(data = df2[which.max(df2$positive_rate),], aes(date,positive_rate,label=p3t), vjust=0.40,hjust=-.1,size=4.5)+
+  theme_bw()+ 
+  theme(axis.text=element_text(size=9),axis.title=element_text(size=10,face="bold"),title = element_text(size = 10,face = "bold"))
+
+p4=ggplot(df2, aes(x =date , y =people_fully_vaccinated)) + 
+  geom_point(size=1,alpha=.8,shape=1,colour="seagreen3") +
+  geom_point(data=df2[which.max(df2$people_fully_vaccinated),],size=1,alpha=1,shape=4,colour="black")+
+  geom_line(alpha=0.55,colour="seagreen3")+xlab("Date")+ ylab("Total number of people who received all doses") + ggtitle("The Trend of People who are Fully Vaccinated")+
+  geom_text(data = df2[which.max(df2$people_fully_vaccinated),], aes(date,people_fully_vaccinated,label=p4t), vjust=0.40,hjust=1.1,size=4.5)+
+  theme_bw()+ 
+  theme(axis.text=element_text(size=9),axis.title=element_text(size=10,face="bold"),title = element_text(size = 10,face = "bold"))
+
+
+p1+p2+p3+p4+plot_layout(ncol=1)
+
+```
+
+<br>
+
+### Question 11
+From the four figures (the highest value has been labeled in each figure), we can find that from around 2020-01 to 2020-04, the number of new cases, new deaths per million and the positive rate all increased obviously. The positive rate reached the highest value on 2020-04-06. At that time, COVID-19 had just been discovered and studied by people and many people didn't pay much attention to it which led to the COVID-19 first outbreak. 
+
+<br>
+  
+From 2020-04 to the winter of 2020, the number of new cases, new deaths per million and the positive rate all obviously decreased with small fluctuations, possibly because at that time more and more states in US announced and extended the mask order and stay-at-home order, like Illinois (According to https://ballotpedia.org/State-level_mask_requirements_in_response_to_the_coronavirus_(COVID-19)_pandemic,_2020-2021). People also paid attention to keep social distance.
+    
+<br>
+
+With the cold weather coming, the number of new cases, new deaths per million and the positive rate all obviously increased again. The New cases and new deaths of COVID-19 per million both reached highest value on 2021-01-12.
+    
+<br>
+    
+And from 2021-01, the  number of people who are fully vaccinated has been increasing and tends to keep steady. Due to the impact of vaccination, the number of new cases, new deaths per million and the positive rate all obviously decreased from 2021-01 to 2021-08. The total number of people who are fully vaccinated reached highest number on 2021-08-12.
+
+<br>
+
+However, the number of new cases, new deaths per million and the positive rate all began to increase again from summer 2021 (around 2021-06 or 2021-07), the reasons probably due to the CDC announcement on May 13 that vaccinated individuals could "resume activities without wearing a mask or physically distancing which enabled people who all fully vaccinated not to wear masks (According to https://www.usnews.com/news/best-states/articles/these-are-the-states-with-mask-mandates). But later CDC found the vaccine does not have sufficient preventive ability against Delta Variant, even for people who were fully vaccinated (According to https://www.cdc.gov/coronavirus/2019-ncov/variants/delta-variant.html). Moreover, the increasing number of students who returned to campus from 2021-07 also led the situation to become bad again.  
+    
+<br>
+
+For the latest recorded date, we can find the number of new cases, new deaths per million and the positive rate all gradually increase again, and the number of people who are fully vaccinated slowly increases and tends to keep steady.
+
+<br>
+  
+<br>
+
+---
+
+### Exploratory Data Analysis and Data Preprocessing
+### Question 12
+```{r load student data}
+s_p=read.csv("student_performance.csv",sep=";",header = T)
+```
+### Question 13
+```{r plot, fig.height=6.6, fig.width=4.8}
+# transpose
+s_p1=s_p%>% select(Pstatus,famsup,paid,activities,nursery,higher,internet,romantic)%>%gather("key","value")
+s_p1$Value=factor(s_p1$value, levels=c("A","T","no","yes"), labels=c("A","T","no","yes"))
+# plot using facet_wrap
+ggplot(s_p1, aes(x =Value, fill=Value))+geom_bar()+geom_text(aes(label = ..count..), stat = "count",vjust=0.3,size=2.7) +xlab("Value")+ylab("Count")+theme_bw()+facet_wrap(~factor(key,levels = c("Pstatus","famsup","paid","activities","nursery","higher","internet","romantic")),nrow = 4,ncol = 2,scales = "free_x")
+
+```
+
+<br>
+
+### Question 14
+```{r hist,fig.height=5,fig.width=10}
+#absence
+# range
+range(s_p$absences)
+# plot (use breaks to change bins here)
+p5=ggplot(s_p, aes(absences)) +geom_histogram(aes(y = ..density..), binwidth=10,fill = "white",colour="black") +geom_density(alpha=.30,fill="cyan3")+scale_x_continuous(limits = c(min(s_p$absences)-10,max(s_p$absences)+10))+ggtitle("Histogram of the Students' Absences with Density Curve")+xlab( "Absences")+ylab("Density") +theme_bw()+theme(axis.text=element_text(size=9),axis.title=element_text(size=9,face="bold"),title = element_text(size = 9,face = "bold"))
+
+#G3
+#range (also use breaks to change bins here)
+range(s_p$G3)
+#plot
+p6=ggplot(s_p, aes(G3)) +geom_histogram(aes(y = ..density..),binwidth = 5, fill = "white",colour="black") +geom_density(alpha=.35,fill="cyan3")+scale_x_continuous(limits = c(min(s_p$G3)-5,max(s_p$G3)+5))+ggtitle ("Histogram of Students' Final Grade with Density Curve")+xlab("Final Grade")+ylab("Density") +theme_bw()+theme(axis.text=element_text(size=9),axis.title=element_text(size=9,face="bold"),title = element_text(size = 9,face = "bold"))
+
+p5+p6+ plot_layout(nrow = 1)
+```
+
+<br>
+
+### Question 15
+```{r mean}
+# mean final of separated
+m1=s_p%>%filter(Pstatus=="A")%>%summarise(m1=mean(G3))
+m2=s_p%>%filter(Pstatus=="T")%>%summarise(m2=mean(G3))
+m3=s_p%>%filter(higher=="yes")%>%summarise(m3=mean(absences))
+m4=s_p%>%filter(higher=="no")%>%summarise(m4=mean(absences))
+m_df=data.frame(m1,m2,m3,m4)
+kable(m_df,col.names=c("Average final grade # whose parents are sperated","Average final grade # whose parents are together","Average #absences who wanna higher education","Average #absences who do not wanna higher education"))
+```
+
+<br>
+
+### Question 16
+```{r two density,fig.height=5,fig.width=12}
+# mean
+mean_ah=s_p%>%group_by(higher)%>%summarise(ma=mean(absences))
+mean_Gh=s_p%>%group_by(higher)%>%summarise(mG=mean(G3))
+# absences
+p7=ggplot(s_p,aes(x=absences,group=higher,color=higher))+geom_density(size=.8,alpha=1)+geom_vline(data = mean_ah,aes(xintercept=ma,color=higher),size=.8,alpha=.8)+xlim(c(0,80))+ggtitle("Density of Students' Absences for Different Perferences for Higher Education")+xlab("Absences")+ylab("Density")+theme_bw()+theme(axis.text=element_text(size=9),axis.title=element_text(size=10,face="bold"),title = element_text(size =8,face = "bold"))
+# G3
+p8=ggplot(s_p,aes(x=G3,group=higher,color=higher))+geom_density(size=.8,alpha=1)+geom_vline(data = mean_Gh,aes(xintercept=mG,color=higher),size=.8,alpha=.8)+xlim(c(0,20))+ggtitle("Density of Students' Final Grade For Different Perferences for Higher Education")+xlab("Final Grade")+ylab("Density")+theme_bw()+theme(axis.text=element_text(size=9),axis.title=element_text(size=10,face="bold"),title = element_text(size =8,face = "bold"))
+
+p7+p8+plot_layout(nrow=1)
+
+```
+
+<br>
+
+### Question 17
+**(1)** For the variable **"Absences"**, we can find that there is no significant differences between the two groups where subjects want to participate in higher education. The shapes of the two curves are just slightly different, and the mean of absences among subjects who do not want to take higher education is just slightly larger than which among subjects who want to take higher education.   
+**(2)** For the variable **G3/Final Grade**, we can find that there is strong differences between the two groups where subjects want to participate in higher education. The shapes of the two curves are just slightly different, but the mean of final grade among subjects who want to take higher education is obviously larger than which among subjects who do not want to take higher education. And subjects who get low final grade (lower than around 8) are more likely to not want to take higher education, whereas subjects who get higher final grade (higher than around 8) are more likely to want to take higher education.  
+**(3)** Subjects who **do not** want to pursue higher education seem to have a higher average value of `Absences`, whereas subjects who **want** to pursue higher education seem to have a higher average value of `G3/Final Grade`.
+
+<br>
+
+### Question 18
+**(a)** Yes, the data for each predictor is skewed.  
+**(b)** The variable **"Absences"** has positive skewness, whereas the variable **"G3"** has slightly negative skewness.  
+**(c)** 
+```{r skew}
+# skewness for absences
+n1=length(s_p$absences)
+ag1=mean(s_p$absences)
+sk1=((1/n1)*sum((s_p$absences-ag1)^3))/(((1/(n1-1))*sum((s_p$absences-ag1)^2))^(3/2))
+sk1
+# skewness for G3
+n2=length(s_p$G3)
+ag2=mean(s_p$G3)
+sk2=((1/n2)*sum((s_p$G3-ag2)^3))/(((1/(n2-1))*sum((s_p$G3-ag2)^2))^(3/2))
+sk2
+```
+The skewness for absences is `r {sk1}`, and The skewness for G3 is `r {sk2}`.  
+  
+**(d)** The skewness of **"Absences"** is larger than 1, so it is highly skewed. Whereas, the skewness of **"G3"** is between $-1$ to $-\frac 1 2$, so it is moderately skewed.
+
+<br>
+
+### Question 19
+```{r cor,fig.width=6,fig.height=6}
+# select numeric columns
+s_pn=s_p%>%select_if(is.numeric)
+# plot for correlation 
+cor=cor(s_pn)
+corrplot(cor,method = "circle",addCoef.col = "hotpink",tl.col = "black",number.cex =.7,title = "Correlation Plot of the Numeric Fields",mar = c(0,0,0.75,0),tl.cex=1)
+```
+
+<br>
+
+### Question 20
+The factor **second period grade G2** has the strongest correlation with the final grade "G3". The observation makes sense because given the time of second period test and final year (i.e., the 3rd period) test are close to each other, then if a student can perform well during second period, the student will have a large probability to get a good grade in final year.
+
+<br>
+
+### Question 21
+```{r zscore}
+# calculate z score
+mz=mean(s_p$absences)
+msd=sd(s_p$absences)
+s_p$zscore=(s_p$absences-mz)/msd
+# After checking there is no z-score<-3 (using filter and length)
+#Check z-score>3
+z_30=s_p%>%filter(zscore>3)
+length(z_30$zscore)
+```
+**(1)** There are 6 outliers for $z>3$. 
+
+<br>
+
+**(2)** Histogram of absences with or without Outlier  
+```{r hist_z, fig.height=4,fig.width=9}
+s_pout=s_p%>%filter(zscore<=3)
+p9=ggplot(s_p,aes(x = absences))+geom_histogram(binwidth=5,fill = "pink",colour="black")+scale_x_continuous(limits = c(min(s_p$absences)-5,max(s_p$absences)+5))+ggtitle("Histogram of Absences") +ylab("Count")+xlab("Absences")+theme(axis.text=element_text(size=9),axis.title=element_text(size=9,face="bold"),title = element_text(size = 8,face = "bold"))+theme_bw()
+
+p10=ggplot(s_pout,aes(x = absences))+geom_histogram(binwidth=5,fill = "pink",colour="black")+scale_x_continuous(limits = c(min(s_pout$absences)-5,max(s_pout$absences)+5))+ggtitle("Histogram of Absences without Outlier") +ylab("Count")+xlab("Absences without Outlier ")+theme(axis.text=element_text(size=9),axis.title=element_text(size=9,face="bold"),title = element_text(size = 8,face = "bold"))+theme_bw()
+p9 + p10 + plot_layout(nrow = 1)
+```
+
+<br>
+
+### Question 22
+```{r win, fig.height=4,fig.width=5}
+#check the quantile
+quantile(s_p$absences,c(0,0.05,0.95,1))
+#how much data < 5th
+length(which(s_p$absences<quantile(s_p$absences,0.05)))
+#how much data > 95th
+length(which(s_p$absences>quantile(s_p$absences,0.95)))
+#use the winsorize in DescTools package
+s_p_win=s_p%>%mutate(win=Winsorize(absences,probs = c(0.05,0.95)))
+p11=ggplot(s_p_win ,aes(x = win))+geom_histogram(binwidth=5,fill = "pink",colour="black")+scale_x_continuous(limits = c(min(s_p_win$win)-5,max(s_p_win$win)+5))+ggtitle("Histogram of Absences with Winsorized Data") +ylab("Count")+xlab("Absences with Winsorized Data")+theme(axis.text=element_text(size=9),axis.title=element_text(size=9,face="bold"),title = element_text(size = 8,face = "bold"))+theme_bw()
+p11
+
+```
+  
+We can find that there is no data below the 5th percentile because the 0% and 5% are both 0, but there are 20 data points' value above the 95th percentile.  
+And comparing the histograms in `Question 21` and `Question 22`, we can find the results after using the `remove outlier for z>3` method and `winsorization` method are very similar. But the total number of value in the variable **absences** after using latter method `winsorization` will be more than which after using the former value because `winsorization` do not remove data point and only adjust its value. Moreover, after using `remove outlier for z>3` method, we can still find the slightly long tail around value 30 in the corresponding histogram, but the histogram of using `winsorization` does not have the tail.  
+
+
